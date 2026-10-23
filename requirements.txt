@@ -1,0 +1,16 @@
+# Core ML & Inference Engines
+vllm[audio]>=0.6.0
+pyannote.audio>=3.1.0
+transformers>=4.45.0
+accelerate>=0.34.0
+huggingface-hub>=0.25.0
+safetensors>=0.4.5
+tokenizers>=0.20.0
+
+# Audio Processing
+soundfile>=0.12.1
+librosa>=0.10.2
+numpy>=1.26.0
+
+# System & Monitoring
+psutil>=5.9.0

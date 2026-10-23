@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "customer-support-pipeline"
+version = "1.0.0"
+description = "Production Customer Support Speech Intelligence & Evaluation Pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Customer Support Analytics Team"}
+]
+keywords = ["vllm", "whisper", "pyannote", "diarization", "asr", "qwen", "evaluation"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "vllm[audio]>=0.6.0",
+    "pyannote.audio>=3.1.0",
+    "transformers>=4.45.0",
+    "accelerate>=0.34.0",
+    "huggingface-hub>=0.25.0",
+    "safetensors>=0.4.5",
+    "tokenizers>=0.20.0",
+    "soundfile>=0.12.1",
+    "librosa>=0.10.2",
+    "numpy>=1.26.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.9.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+csp-run = "customer_support_pipeline.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
