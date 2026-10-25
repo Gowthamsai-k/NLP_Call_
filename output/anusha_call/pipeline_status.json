@@ -7,11 +7,39 @@
       "status": "resumed"
     },
     "diarization": {
+      "status": "resumed"
+    },
+    "transcription": {
+      "status": "resumed"
+    },
+    "punctuation": {
       "status": "success",
-      "duration_s": 50.53
+      "duration_s": 97.94
+    },
+    "alignment": {
+      "status": "success",
+      "duration_s": 0.01
+    },
+    "intent_extraction": {
+      "status": "success",
+      "duration_s": 1387.3
+    },
+    "evaluation": {
+      "status": "success",
+      "duration_s": 999.79
     }
   },
-  "status": "failed",
-  "error": "RuntimeError: [Stage 3 (ASR Transcription)] Failed after 3 attempts: /mnt/c/Users/Harshith/NLP_Call_/.venv/lib/python3.12/site-packages/vllm/_C.abi3.so: undefined symbol: _ZN5torch3jit17parseSchemaOrNameERKSsb",
-  "elapsed_seconds": 63.49
+  "status": "success",
+  "removed_intermediates": [
+    "call_clean.wav",
+    "call_metadata.json",
+    "whisper_transcript.json",
+    "horizon_punctuated_transcript.json"
+  ],
+  "elapsed_seconds": 2496.86,
+  "deliverables": {
+    "transcript": "/mnt/c/Users/Harshith/NLP_Call_/output/anusha_call/call_transcript_with_speakers.json",
+    "intent": "/mnt/c/Users/Harshith/NLP_Call_/output/anusha_call/intent_extraction.json",
+    "evaluation": "/mnt/c/Users/Harshith/NLP_Call_/output/anusha_call/call_evaluation.json"
+  }
 }

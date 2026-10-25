@@ -1,0 +1,81 @@
+{
+  "chunk_number": 2,
+  "start_index": 15,
+  "end_index": 29,
+  "evaluation": {
+    "intent_review": "supported",
+    "client_needs": [
+      "Have the subject names and employee IDs corrected in NLP",
+      "Receive confirmation that the error Excel sheet has been shared via email",
+      "Get clarification on missing employee data in NLP"
+    ],
+    "agent_actions": [
+      "details you have to add in NLP",
+      "I sent you mom, you can check the email",
+      "on your email id have shared it?",
+      "If you need any clarification please share back on the same mail loop ma'am",
+      "If you have any queries, reach out to me or Amrita",
+      "Thank you, ma'am. Thank you, ma'am. Thank you. Thank you, mom. Have a good day."
+    ],
+    "resolution": {
+      "status": "unresolved",
+      "explanation": "The agent confirms sending the error sheet via email and offers clarification, but no confirmation from the client is provided, and no action is taken to correct the data in NLP."
+    },
+    "scorecard": {
+      "professionalism_score": 90,
+      "respectfulness_score": 100,
+      "politeness_score": "The agent closes with multiple expressions of gratitude and a warm closing, reflecting cultural norms of politeness in Indian English and Indic code-switching.",
+      "total_score": 97,
+      "professionalism_rationale": "The agent maintains clear, structured communication and addresses the issue directly without unnecessary tangents.",
+      "respectfulness_rationale": "The agent consistently uses honorifics like 'ma'am' and addresses the client with deference throughout the interaction.",
+      "evidence": [
+        {
+          "timestamp": "38.19-40.13",
+          "speaker_id": "SPEAKER_00",
+          "quote": "details you have to add in NLP",
+          "category": "politeness",
+          "interpretation": "Clear and respectful acknowledgment of the client's data issue without blame or defensiveness."
+        },
+        {
+          "timestamp": "45.64-47.87",
+          "speaker_id": "SPEAKER_00",
+          "quote": "I sent you mom, you can check the email",
+          "category": "respectfulness",
+          "interpretation": "Uses culturally appropriate term 'mom' to refer to the error sheet, showing familiarity and respect."
+        },
+        {
+          "timestamp": "48.48-52.82",
+          "speaker_id": "SPEAKER_00",
+          "quote": "on your email id have shared it?",
+          "category": "respectfulness",
+          "interpretation": "Asks directly but politely to confirm receipt, showing attentiveness to client's needs."
+        },
+        {
+          "timestamp": "55.03-61.57",
+          "speaker_id": "SPEAKER_00",
+          "quote": "If you need any clarification please share back on the same mail loop ma'am",
+          "category": "professionalism",
+          "interpretation": "Provides clear, actionable next steps with proper address and tone."
+        },
+        {
+          "timestamp": "61.73-65.20",
+          "speaker_id": "SPEAKER_00",
+          "quote": "If you have any queries, reach out to me or Amrita. Okay,",
+          "category": "politeness",
+          "interpretation": "Offers support with warmth and clarity, maintaining a respectful and open channel."
+        },
+        {
+          "timestamp": "65.57-68.48",
+          "speaker_id": "SPEAKER_00",
+          "quote": "Thank you, mom. Have a good day.",
+          "category": "politeness",
+          "interpretation": "Closes with culturally appropriate and warm closing, reflecting regional norms."
+        }
+      ]
+    },
+    "uncertainties": [
+      "No confirmation from client about receipt of error sheet or correction of data in NLP",
+      "The phrase 'talking on and please in the Yerar she mentioned' is unintelligible and may indicate ASR error or incomplete context"
+    ]
+  }
+}

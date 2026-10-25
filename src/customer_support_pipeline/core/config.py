@@ -11,7 +11,7 @@ from pathlib import Path
 DIARIZATION_MODEL_ID = "pyannote/speaker-diarization-community-1"
 WHISPER_MODEL_ID = "RedHatAI/whisper-large-v3-quantized.w8a8"
 PUNCTUATION_MODEL_ID = "Horizon-Labs/punctuation-restoration-small"
-LLM_MODEL_ID = "Qwen/Qwen3-4B-Instruct-2507"
+LLM_MODEL_ID = os.environ.get("LLM_MODEL_ID", "Qwen/Qwen2.5-3B-Instruct")
 
 # ==============================================================================
 # AUDIO & ASR CONFIGURATION

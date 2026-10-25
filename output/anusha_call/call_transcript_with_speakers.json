@@ -1,0 +1,263 @@
+[
+  {
+    "start": 1.448,
+    "end": 1.988,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Good morning.",
+    "raw_text": "Good morning.",
+    "words": []
+  },
+  {
+    "start": 2.039,
+    "end": 2.275,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Thank you.",
+    "raw_text": "Thank you.",
+    "words": []
+  },
+  {
+    "start": 2.663,
+    "end": 4.182,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Hello Hello.",
+    "raw_text": "Hello. Hello.",
+    "words": []
+  },
+  {
+    "start": 5.6,
+    "end": 6.545,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Sana ütlülür mü.",
+    "raw_text": "Sana ütlülür mü?",
+    "words": []
+  },
+  {
+    "start": 7.304,
+    "end": 10.544,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Yes ma'am, good evening. Anusha here from Nexa 14.",
+    "raw_text": "Yes ma'am, good evening Anusha here from Nexa 14.",
+    "words": []
+  },
+  {
+    "start": 11.27,
+    "end": 11.624,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Okay,",
+    "raw_text": "Okay.",
+    "words": []
+  },
+  {
+    "start": 11.692,
+    "end": 13.143,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.896,
+    "text": "Hi, I'm good morning.",
+    "raw_text": "Hi, I'm good morning.",
+    "words": []
+  },
+  {
+    "start": 11.81,
+    "end": 11.978,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.5,
+    "text": "Hi.",
+    "raw_text": "Hi.",
+    "words": []
+  },
+  {
+    "start": 14.358,
+    "end": 20.838,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.897,
+    "text": "Ma'am, you have requested for a call back on this member, ma'am. Yes, ma'am. Ma'am, what's the problem, ma'am.",
+    "raw_text": "Ma'am, you have requested for a call back on this member ma'am. Yes ma'am. Ma'am, what's the problem ma'am?",
+    "words": []
+  },
+  {
+    "start": 18.458,
+    "end": 19.201,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.5,
+    "text": "Yes, ma'am.",
+    "raw_text": "Yes, ma'am.",
+    "words": []
+  },
+  {
+    "start": 21.023,
+    "end": 22.475,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "I will look at the timetable.",
+    "raw_text": "I will look at the timetable.",
+    "words": []
+  },
+  {
+    "start": 22.897,
+    "end": 27.284,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Yeah yeah, when we have uploaded mom, I have shared you the error excel sheet.",
+    "raw_text": "Yeah, yeah, when we have uploaded mom, I have shared you the error excel sheet.",
+    "words": []
+  },
+  {
+    "start": 27.79,
+    "end": 33.629,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "the subject names are incorrect and few of them we haven't found and the employee ids and names",
+    "raw_text": "the subject names are incorrect and few of them we haven't found and the employee ids and names",
+    "words": []
+  },
+  {
+    "start": 34.22,
+    "end": 36.143,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "we did not find in NLP.",
+    "raw_text": "we did not find in NLP.",
+    "words": []
+  },
+  {
+    "start": 36.582,
+    "end": 37.932,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.833,
+    "text": "So that",
+    "raw_text": "So that",
+    "words": []
+  },
+  {
+    "start": 37.493,
+    "end": 37.763,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.5,
+    "text": "Bye.",
+    "raw_text": "Bye.",
+    "words": []
+  },
+  {
+    "start": 38.185,
+    "end": 40.126,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "details you have to add in NLP.",
+    "raw_text": "details you have to add in NLP",
+    "words": []
+  },
+  {
+    "start": 41.24,
+    "end": 45.239,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "talking on and please in the Yerar she mentioned",
+    "raw_text": "talking on, and please in the Yerar, she mentioned",
+    "words": []
+  },
+  {
+    "start": 45.644,
+    "end": 47.872,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "I sent you mom, you can check the email",
+    "raw_text": "I sent you mom, you can check the email.",
+    "words": []
+  },
+  {
+    "start": 48.479,
+    "end": 52.816,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.959,
+    "text": "on your email id have shared it?",
+    "raw_text": "on your email id have shared it",
+    "words": []
+  },
+  {
+    "start": 49.12,
+    "end": 49.306,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.5,
+    "text": "Awesome.",
+    "raw_text": "Awesome.",
+    "words": []
+  },
+  {
+    "start": 53.12,
+    "end": 54.537,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Okay,",
+    "raw_text": "Okay.",
+    "words": []
+  },
+  {
+    "start": 55.027,
+    "end": 61.574,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.704,
+    "text": "If you need any clarification please share back on the same mail loop ma'am.",
+    "raw_text": "If you need any clarification, please share back on the same mail loop, ma'am.",
+    "words": []
+  },
+  {
+    "start": 55.33,
+    "end": 58.081,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.5,
+    "text": "I need any clarification or you can answer?",
+    "raw_text": "I need any clarification or you can answer.",
+    "words": []
+  },
+  {
+    "start": 61.726,
+    "end": 65.202,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "If you have any queries, reach out to me or Amrita. Okay,",
+    "raw_text": "If you have any queries, reach out to me or Amrita. Okay?",
+    "words": []
+  },
+  {
+    "start": 65.573,
+    "end": 67.092,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.643,
+    "text": "Thank you, ma'am. Thank you, ma'am.",
+    "raw_text": "Thank you, ma'am. Thank you, ma'am.",
+    "words": []
+  },
+  {
+    "start": 65.624,
+    "end": 66.468,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 0.5,
+    "text": "Thank you.",
+    "raw_text": "Thank you.",
+    "words": []
+  },
+  {
+    "start": 67.126,
+    "end": 68.476,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "Thank you, mom. Have a good day.",
+    "raw_text": "Thank you, mom. Have a good day.",
+    "words": []
+  },
+  {
+    "start": 80.963,
+    "end": 81.858,
+    "speaker_id": "SPEAKER_00",
+    "speaker_match_confidence": 1.0,
+    "text": "감사합니다.",
+    "raw_text": "감사합니다.",
+    "words": []
+  }
+]

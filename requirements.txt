@@ -9,7 +9,7 @@ torchcodec
 # Core ML & Inference Engines
 vllm[audio]>=0.6.0
 pyannote.audio>=4.0.0
-transformers>=4.45.0,<4.47.0
+transformers>=4.48.0
 accelerate>=0.34.0
 huggingface-hub>=0.25.0
 safetensors>=0.4.5

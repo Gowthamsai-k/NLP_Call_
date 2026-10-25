@@ -1,0 +1,32 @@
+{
+  "speaker_roles": {
+    "agent": {
+      "speaker_id": "SPEAKER_00",
+      "evidence": "SPEAKER_00 says: 'Yes ma'am, good evening. Anusha here from Nexa 14.' and 'I will look at the timetable.' and 'If you have any queries, reach out to me or Amrita.'"
+    },
+    "client": {
+      "speaker_id": null,
+      "evidence": "SPEAKER_00 refers to 'ma'am' multiple times and mentions 'you have requested for a call back on this member', 'the subject names are incorrect', 'we did not find in NLP', and 'details you have to add in NLP'."
+    }
+  },
+  "primary_client_intent": "resolve discrepancies in subject names and employee data in the NLP system",
+  "secondary_intents": [
+    "verify the accuracy of subject names and employee IDs shared in the error Excel sheet",
+    "confirm receipt of the error sheet and related email",
+    "request clarification on missing employee details in NLP"
+  ],
+  "client_needs_and_requests": [
+    "Have the subject names and employee IDs corrected in NLP",
+    "Receive confirmation that the error Excel sheet has been shared via email",
+    "Get clarification on missing employee data in NLP"
+  ],
+  "key_events": [
+    "SPEAKER_00 confirms a call back was requested on a member and asks about the problem (14.36-20.84)",
+    "SPEAKER_00 reports that subject names are incorrect and some employee IDs and names are missing in NLP (27.79-33.63)",
+    "SPEAKER_00 states that details need to be added in NLP (38.19-40.13)",
+    "SPEAKER_00 mentions sending the mom (error sheet) via email and asks if the client has received it (45.64-48.48)",
+    "SPEAKER_00 offers to assist with clarifications and provides contact details (61.73-65.20)",
+    "SPEAKER_00 ends the call with gratitude and well-wishes (65.57-68.48)"
+  ],
+  "uncertainties": []
+}

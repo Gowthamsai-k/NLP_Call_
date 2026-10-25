@@ -22,7 +22,7 @@ def run_punctuation_restoration(
     transcript_or_path: Union[str, Path, List[Dict[str, Any]]],
     output_path: str,
 ) -> List[Dict[str, Any]]:
-    """Restores punctuation for transcript segments."""
+    """Restores punctuation for transcript segments with graceful fallback to native ASR punctuation."""
     if isinstance(transcript_or_path, (str, Path)):
         with open(transcript_or_path, "r", encoding="utf-8") as f:
             transcript_segments = json.load(f)
@@ -37,18 +37,25 @@ def run_punctuation_restoration(
 
     try:
         log_vram("Before Punctuation Load")
-        helper_path = hf_hub_download(
-            repo_id=PUNCTUATION_MODEL_ID,
-            filename="punctuate.py",
-        )
+        try:
+            helper_path = hf_hub_download(
+                repo_id=PUNCTUATION_MODEL_ID,
+                filename="punctuate.py",
+            )
 
-        spec = importlib.util.spec_from_file_location("horizon_punctuate", helper_path)
-        punctuate_module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = punctuate_module
-        spec.loader.exec_module(punctuate_module)
+            spec = importlib.util.spec_from_file_location("horizon_punctuate", helper_path)
+            punctuate_module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = punctuate_module
+            spec.loader.exec_module(punctuate_module)
 
-        punctuator = punctuate_module.Punctuator(PUNCTUATION_MODEL_ID)
-        logger.info("Horizon punctuation model loaded successfully.")
+            punctuator = punctuate_module.Punctuator(PUNCTUATION_MODEL_ID)
+            logger.info("Horizon punctuation model loaded successfully.")
+        except Exception as exc:
+            logger.warning(
+                f"Could not load Horizon punctuation model ({type(exc).__name__}: {exc}). "
+                "Proceeding with Whisper's high-quality native punctuation..."
+            )
+            punctuator = None
 
         for i, segment in enumerate(transcript_segments):
             raw_text = segment.get("raw_text") or segment.get("text", "")
@@ -58,15 +65,18 @@ def run_punctuation_restoration(
                 segment["text"] = raw_text
                 continue
 
-            try:
-                punctuated_text = punctuator(raw_text)
-                segment["text"] = (
-                    punctuated_text.strip()
-                    if isinstance(punctuated_text, str)
-                    else raw_text
-                )
-            except Exception as e:
-                logger.warning(f"Segment {i} punctuation failed: {e}")
+            if punctuator is not None:
+                try:
+                    punctuated_text = punctuator(raw_text)
+                    segment["text"] = (
+                        punctuated_text.strip()
+                        if isinstance(punctuated_text, str)
+                        else raw_text
+                    )
+                except Exception as e:
+                    logger.warning(f"Segment {i} punctuation failed: {e}")
+                    segment["text"] = raw_text
+            else:
                 segment["text"] = raw_text
 
         output_p = Path(output_path).resolve()
