@@ -1,0 +1,507 @@
+"""
+Customer support intent extraction using 4-bit Qwen3 on vLLM.
+"""
+
+import os
+import sys
+import json
+import re
+import logging
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Tuple, Union
+
+import torch
+
+from ..core.config import (
+    LLM_MODEL_ID,
+    INTENT_MAX_MODEL_LEN,
+    MAX_TRANSCRIPT_TOKENS,
+    MAX_BATCH_OUTPUT_TOKENS,
+    MAX_MERGE_OUTPUT_TOKENS,
+    OVERLAP_SEGMENTS,
+    INTENT_GPU_MEM,
+    INTENT_SYSTEM_PROMPT,
+    INTENT_MERGE_SYSTEM_PROMPT,
+)
+from ..core.memory import (
+    bounded_gpu_memory_utilization,
+    release_memory,
+    log_vram,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def parse_json_object(text: str) -> Optional[Dict[str, Any]]:
+    """Robust JSON extraction and validation."""
+    text = text.strip()
+    text = re.sub(r"^\s*```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```\s*$", "", text)
+
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    start = text.find("{")
+    if start < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = json.loads(text[start : i + 1])
+                        return obj if isinstance(obj, dict) else None
+                    except json.JSONDecodeError:
+                        return None
+    return None
+
+
+def empty_result() -> Dict[str, Any]:
+    return {
+        "speaker_roles": {
+            "agent": {"speaker_id": None, "evidence": ""},
+            "client": {"speaker_id": None, "evidence": ""},
+        },
+        "primary_client_intent": "unclear",
+        "secondary_intents": [],
+        "client_needs_and_requests": [],
+        "key_events": [],
+        "uncertainties": [],
+    }
+
+
+def ensure_list(value: Any) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def run_intent_extraction(
+    transcript_or_path: Union[str, Path, List[Dict[str, Any]]],
+    output_path: str,
+    work_dir: Optional[str] = None,
+    existing_llm: Optional[Any] = None,
+    existing_tokenizer: Optional[Any] = None,
+    release_llm_after: bool = False,
+    gpu_memory_utilization: float = INTENT_GPU_MEM,
+) -> Tuple[Dict[str, Any], Any, Any]:
+    """Executes batched intent extraction and hierarchical consolidation."""
+    os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+
+    if isinstance(transcript_or_path, (str, Path)):
+        with open(transcript_or_path, "r", encoding="utf-8") as f:
+            segments = json.load(f)
+    else:
+        segments = transcript_or_path
+
+    if not isinstance(segments, list) or not segments:
+        raise ValueError("Expected a non-empty JSON list of transcript segments.")
+
+    output_p = Path(output_path).resolve()
+    batch_dir = Path(work_dir) if work_dir else output_p.parent / "intent_batches"
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    valid_speaker_ids = sorted({
+        str(s["speaker_id"])
+        for s in segments
+        if s.get("speaker_id") not in (None, "", "UNKNOWN")
+    })
+
+    def format_segment(segment):
+        speaker = segment.get("speaker_id") or "UNKNOWN"
+        return (
+            f"[{float(segment['start']):.2f}-"
+            f"{float(segment['end']):.2f}] "
+            f"{speaker}: {str(segment.get('text', '')).strip()}"
+        )
+
+    lines = [format_segment(s) for s in segments]
+    logger.info(f"Intent extraction: {len(segments)} segments, speakers: {valid_speaker_ids}")
+
+    from transformers import AutoTokenizer
+    from vllm import LLM, SamplingParams
+
+    tokenizer = existing_tokenizer
+    if tokenizer is None:
+        tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_ID, trust_remote_code=True)
+
+    llm = existing_llm
+    created_llm = existing_llm is None
+    extraction_succeeded = False
+    if llm is None:
+        log_vram("Before Qwen Intent LLM Load")
+        _orig_stdout, _orig_stderr = sys.stdout, sys.stderr
+        try:
+            sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+            llm = LLM(
+                model=LLM_MODEL_ID,
+                dtype="half",
+                trust_remote_code=True,
+                max_model_len=INTENT_MAX_MODEL_LEN,
+                max_num_seqs=1,
+                gpu_memory_utilization=bounded_gpu_memory_utilization(gpu_memory_utilization),
+                disable_log_stats=True,
+            )
+        finally:
+            sys.stdout, sys.stderr = _orig_stdout, _orig_stderr
+
+    def format_chat(system_message: str, user_message: str) -> str:
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message},
+        ]
+        return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+    def count_tokens(text: str) -> int:
+        return len(tokenizer.encode(text, add_special_tokens=False))
+
+    def generate_text(system_prompt: str, user_message: str, max_new_tokens: int) -> str:
+        formatted_prompt = format_chat(system_prompt, user_message)
+        prompt_tokens = count_tokens(formatted_prompt)
+        max_allowed = INTENT_MAX_MODEL_LEN - max_new_tokens
+
+        if prompt_tokens > max_allowed:
+            raise ValueError(
+                f"Prompt is too long: {prompt_tokens} tokens + "
+                f"{max_new_tokens} output tokens exceeds {INTENT_MAX_MODEL_LEN} limit."
+            )
+
+        params = SamplingParams(temperature=0.0, max_tokens=max_new_tokens)
+        outputs = llm.generate([formatted_prompt], sampling_params=params, use_tqdm=False)
+        result = outputs[0].outputs[0]
+        if getattr(result, "finish_reason", None) == "length":
+            logger.warning("Generation reached max_tokens; output may be truncated.")
+        return result.text.strip()
+
+    def generate_json(
+        user_message: str,
+        system_prompt: str = INTENT_SYSTEM_PROMPT,
+        max_new_tokens: int = MAX_BATCH_OUTPUT_TOKENS,
+        retries: int = 1,
+    ) -> Dict[str, Any]:
+        last_error = None
+        curr_msg = user_message
+        for attempt in range(retries + 1):
+            try:
+                raw = generate_text(system_prompt, curr_msg, max_new_tokens=max_new_tokens)
+                parsed = parse_json_object(raw)
+                if parsed is not None:
+                    return parsed
+                last_error = ValueError(f"Output not valid JSON. Raw:\n{raw[:2000]}")
+            except Exception as exc:
+                last_error = exc
+
+            if attempt < retries:
+                curr_msg += (
+                    "\n\nIMPORTANT: Your previous response could not be parsed as JSON. "
+                    "Return exactly one complete, valid JSON object matching the requested schema. "
+                    "Keep the output concise and do not use Markdown."
+                )
+
+        raise RuntimeError(f"JSON generation failed: {last_error}") from last_error
+
+    def create_batches(transcript_lines, max_tokens=MAX_TRANSCRIPT_TOKENS, overlap=OVERLAP_SEGMENTS):
+        batches = []
+        start = 0
+        while start < len(transcript_lines):
+            end = start
+            batch_lines = []
+            while end < len(transcript_lines):
+                candidate = batch_lines + [transcript_lines[end]]
+                candidate_text = "\n".join(candidate)
+                if batch_lines and count_tokens(candidate_text) > max_tokens:
+                    break
+                batch_lines.append(transcript_lines[end])
+                end += 1
+                if count_tokens("\n".join(batch_lines)) > max_tokens:
+                    break
+
+            if end == start:
+                end = start + 1
+                batch_lines = [transcript_lines[start]]
+
+            batches.append({
+                "batch_number": len(batches) + 1,
+                "start_index": start,
+                "end_index": end,
+                "transcript": "\n".join(batch_lines),
+            })
+
+            if end >= len(transcript_lines):
+                break
+            start = max(start + 1, end - overlap)
+        return batches
+
+    try:
+        batches = create_batches(lines)
+        logger.info(f"Batches created: {len(batches)}")
+
+        batch_results = []
+        previous_context = "No previous batch has been analyzed."
+
+        for batch in batches:
+            number = batch["batch_number"]
+            logger.info(
+                f"Processing batch {number}/{len(batches)} (segments {batch['start_index'] + 1}-{batch['end_index']})"
+            )
+
+            user_message = f"""
+Analyze batch {number} of {len(batches)} from one continuous
+customer-support call.
+
+VALID SPEAKER IDS:
+{json.dumps(valid_speaker_ids, ensure_ascii=False)}
+
+PREVIOUS BATCH CONTEXT:
+{json.dumps(previous_context, ensure_ascii=False)}
+
+CURRENT TRANSCRIPT:
+{batch["transcript"]}
+
+TASKS
+
+1. Identify the agent and client from conversational evidence.
+   Do not assume that a speaker ID identifies a role.
+   If evidence is insufficient, use null.
+   The agent and client must not have the same speaker ID.
+
+2. Identify the client's primary intent:
+   What is the client trying to accomplish, resolve, obtain,
+   change, or understand?
+   State a specific goal, not just a topic such as "payment"
+   or "order".
+
+3. Identify secondary intents and explicit client needs or requests.
+
+4. Record important events, including relevant actions, explanations,
+   commitments, outcomes, and unresolved requests.
+   Distinguish what was requested from what actually happened.
+
+5. Preserve short, exact transcript excerpts as evidence.
+   Include timestamps and speaker IDs whenever possible.
+   Do not fabricate quotations or translate uncertain speech by guessing.
+
+6. Use the previous context only as context. The current transcript
+   is the source for quotations and timestamps.
+   Overlapping segments may repeat information; do not treat repetition
+   as a new event.
+
+7. Do not label intent as unclear if the client's goal can reasonably
+   be inferred from the dialogue. Use unclear only when evidence
+   is genuinely insufficient.
+
+Return exactly one JSON object with this schema:
+
+{{
+  "speaker_roles": {{
+    "agent": {{
+      "speaker_id": null,
+      "evidence": ""
+    }},
+    "client": {{
+      "speaker_id": null,
+      "evidence": ""
+    }}
+  }},
+  "primary_client_intent": "unclear",
+  "secondary_intents": [],
+  "client_needs_and_requests": [],
+  "key_events": [],
+  "uncertainties": []
+}}
+
+For secondary_intents, client_needs_and_requests, key_events,
+and uncertainties, use arrays. Keep the response concise but informative.
+Return JSON only.
+"""
+            result = generate_json(user_message, system_prompt=INTENT_SYSTEM_PROMPT, max_new_tokens=MAX_BATCH_OUTPUT_TOKENS)
+
+            normalized = empty_result()
+            if isinstance(result.get("speaker_roles"), dict):
+                normalized["speaker_roles"].update(result["speaker_roles"])
+            for field in (
+                "primary_client_intent",
+                "secondary_intents",
+                "client_needs_and_requests",
+                "key_events",
+                "uncertainties",
+            ):
+                if field in result:
+                    normalized[field] = result[field]
+            result = normalized
+
+            record = {
+                "batch_number": number,
+                "start_index": batch["start_index"],
+                "end_index": batch["end_index"],
+                "result": result,
+            }
+            batch_results.append(record)
+
+            batch_path = batch_dir / f"batch_{number:03d}.json"
+            with batch_path.open("w", encoding="utf-8") as f:
+                json.dump(record, f, ensure_ascii=False, indent=2)
+
+            previous_context = {
+                "speaker_roles": result["speaker_roles"],
+                "primary_client_intent": result["primary_client_intent"],
+                "secondary_intents": result["secondary_intents"],
+                "client_needs_and_requests": result["client_needs_and_requests"],
+                "key_events": result["key_events"],
+                "uncertainties": result["uncertainties"],
+            }
+
+        def consolidate_group(records, group_number, total_groups):
+            user_message = f"""
+Consolidation group {group_number} of {total_groups}.
+
+VALID SPEAKER IDS:
+{json.dumps(valid_speaker_ids, ensure_ascii=False)}
+
+PARTIAL ANALYSES:
+{json.dumps(records, ensure_ascii=False)}
+
+Merge these analyses into one result. Preserve meaningful details
+and evidence. Remove duplicates without dropping distinct requests.
+
+Use this exact schema:
+
+{{
+  "speaker_roles": {{
+    "agent": {{"speaker_id": null, "evidence": ""}},
+    "client": {{"speaker_id": null, "evidence": ""}}
+  }},
+  "primary_client_intent": "unclear",
+  "secondary_intents": [],
+  "client_needs_and_requests": [],
+  "key_events": [],
+  "uncertainties": []
+}}
+
+Use null for an unknown role. The agent and client must have
+different speaker IDs if both are identified.
+Return JSON only.
+"""
+            return generate_json(
+                user_message,
+                system_prompt=INTENT_MERGE_SYSTEM_PROMPT,
+                max_new_tokens=MAX_MERGE_OUTPUT_TOKENS,
+                retries=1,
+            )
+
+        current_level = [record["result"] for record in batch_results]
+        level_number = 1
+        while len(current_level) > 1:
+            logger.info(f"Aggregation level {level_number}: {len(current_level)} partial results")
+            next_level = []
+            groups = [current_level[i : i + 3] for i in range(0, len(current_level), 3)]
+            for group_index, group in enumerate(groups, start=1):
+                merged = consolidate_group(group, group_index, len(groups))
+                next_level.append(merged)
+                checkpoint = batch_dir / f"aggregation_level_{level_number}_group_{group_index}.json"
+                with checkpoint.open("w", encoding="utf-8") as f:
+                    json.dump(merged, f, ensure_ascii=False, indent=2)
+
+            current_level = next_level
+            level_number += 1
+
+        final_result = current_level[0] if current_level else empty_result()
+
+        def normalize_role(entry, role_name):
+            if not isinstance(entry, dict):
+                entry = {}
+            speaker_id = entry.get("speaker_id")
+            if speaker_id in (None, "", "null", "UNKNOWN", "NULL"):
+                speaker_id = None
+            else:
+                speaker_id = str(speaker_id)
+
+            evidence = entry.get("evidence", "")
+            if not isinstance(evidence, str):
+                evidence = str(evidence or "")
+
+            notes = []
+            if speaker_id is not None and speaker_id not in valid_speaker_ids:
+                notes.append(
+                    f"{role_name} speaker ID {speaker_id!r} was not present in the transcript."
+                )
+                speaker_id = None
+
+            return {"speaker_id": speaker_id, "evidence": evidence.strip()}, notes
+
+        validation_notes = []
+        roles = final_result.get("speaker_roles", {})
+        if not isinstance(roles, dict):
+            roles = {}
+
+        agent, notes = normalize_role(roles.get("agent"), "Agent")
+        validation_notes.extend(notes)
+        client, notes = normalize_role(roles.get("client"), "Client")
+        validation_notes.extend(notes)
+
+        if agent["speaker_id"] is not None and agent["speaker_id"] == client["speaker_id"]:
+            validation_notes.append(
+                "Agent and client had the same speaker ID; both roles were set to null."
+            )
+            agent["speaker_id"] = None
+            client["speaker_id"] = None
+
+        uncertainties = ensure_list(final_result.get("uncertainties"))
+        uncertainties.extend(validation_notes)
+
+        primary_intent = final_result.get("primary_client_intent", "unclear")
+        if not isinstance(primary_intent, str):
+            primary_intent = "unclear"
+
+        normalized_result = {
+            "speaker_roles": {
+                "agent": agent,
+                "client": client,
+            },
+            "primary_client_intent": primary_intent,
+            "secondary_intents": ensure_list(final_result.get("secondary_intents")),
+            "client_needs_and_requests": ensure_list(final_result.get("client_needs_and_requests")),
+            "key_events": ensure_list(final_result.get("key_events")),
+            "uncertainties": uncertainties,
+        }
+
+        output_p.parent.mkdir(parents=True, exist_ok=True)
+        with output_p.open("w", encoding="utf-8") as f:
+            json.dump(normalized_result, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"Intent extraction complete -> {output_p.name}")
+        extraction_succeeded = True
+        return normalized_result, llm, tokenizer
+
+    finally:
+        # The pipeline normally keeps this engine alive for Stage 7. If Stage 6
+        # fails before returning it, however, no caller owns it to tear it down.
+        # Explicitly shut down engines created here on that error path so retries
+        # and later calls do not inherit its CUDA allocations.
+        if release_llm_after or (created_llm and not extraction_succeeded):
+            release_memory(llm, tokenizer)
+            log_vram("After Intent LLM Cleanup")

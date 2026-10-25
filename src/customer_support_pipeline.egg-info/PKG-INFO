@@ -1,0 +1,199 @@
+Metadata-Version: 2.4
+Name: customer-support-pipeline
+Version: 1.0.0
+Summary: Production Customer Support Speech Intelligence & Evaluation Pipeline
+Author: Customer Support Analytics Team
+License: MIT
+Keywords: vllm,whisper,pyannote,diarization,asr,qwen,evaluation
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Operating System :: POSIX :: Linux
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: vllm[audio]>=0.6.0
+Requires-Dist: pyannote.audio>=3.1.0
+Requires-Dist: transformers>=4.45.0
+Requires-Dist: accelerate>=0.34.0
+Requires-Dist: huggingface-hub>=0.25.0
+Requires-Dist: safetensors>=0.4.5
+Requires-Dist: tokenizers>=0.20.0
+Requires-Dist: soundfile>=0.12.1
+Requires-Dist: librosa>=0.10.2
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: psutil>=5.9.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: black>=23.9.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+
+# Customer Support Call Intelligence Pipeline
+
+A modular, production-ready Python project converted directly from the single-model VRAM notebook. It processes customer support audio calls end-to-end: diarization, speech-to-text, punctuation restoration, speaker alignment, intent extraction, and call quality evaluation.
+
+---
+
+## Key Features
+
+1. **Strict Code Logic Preservation**:
+   - Preserves all prompt templates, system instructions, Indic language handling, token constraints, and validation schemas verbatim.
+   - Retains the exact 7-task intent extraction rules and 8-task call evaluation criteria.
+   - Preserves the deterministic fallback merge for call evaluation.
+
+2. **Aggressive Unused Memory Release**:
+   - Sequential model execution: only one model resides in GPU VRAM at a time.
+   - Explicit teardown of vLLM engines and PyTorch pipelines (`release_memory()`).
+   - Runs `gc.collect()`, `torch.cuda.empty_cache()`, `torch.cuda.ipc_collect()`, and stream synchronization between stages to eliminate runtime OOM crashes.
+
+3. **Stage-Level & Generation Retries**:
+   - Each pipeline stage is wrapped in exponential backoff retries (`retry_with_memory_cleanup`).
+   - If an out-of-memory or transient CUDA/API error occurs, GPU cache is immediately purged before retrying.
+   - LLM JSON generation includes automatic formatting retry prompts if an invalid JSON response is returned.
+
+4. **Folder Processing & Archive Uploading**:
+   - Supports single audio files, directories of audio files, or `.zip`/`.tar` archives.
+   - In folder mode, each call is isolated in its own subfolder.
+   - Failure resilience: if an individual audio file fails, the error is recorded in `batch_processing_summary.json` and the pipeline continues to subsequent files without interruption.
+
+5. **Resume & Checkpointing**:
+   - Automatically detects previously completed deliverables (`call_transcript_with_speakers.json`, `intent_extraction.json`, `call_evaluation.json`).
+   - Resumes interrupted jobs without re-running expensive model inference stages.
+
+---
+
+## Pipeline Stages
+
+```
+Raw Audio (.mp3, .wav, .m4a, etc.)
+  │
+  ▼
+[Stage 1: FFmpeg Conversion] ──────> 16 kHz Mono WAV
+  │
+  ▼
+[Stage 2: Pyannote Diarization] ───> call_metadata.json (Speaker turns)
+  │ (Release Diarization VRAM)
+  ▼
+[Stage 3: Whisper Large v3 ASR] ───> whisper_transcript.json (Turn-by-turn text)
+  │ (Release Whisper VRAM)
+  ▼
+[Stage 4: Horizon Punctuation] ────> horizon_punctuated_transcript.json
+  │ (Release Punctuation VRAM)
+  ▼
+[Stage 5: Speaker Alignment] ──────> call_transcript_with_speakers.json (Deliverable 1)
+  │
+  ▼
+[Stage 6: Qwen3 Intent Extraction] > intent_extraction.json (Deliverable 2)
+  │
+  ▼
+[Stage 7: Qwen3 Call Evaluation] ──> call_evaluation.json (Deliverable 3)
+  │ (Release Qwen VRAM)
+  ▼
+[Stage 8: Cleanup] ────────────────> Removes temporary WAV and intermediate files
+```
+
+---
+
+## Project Structure
+
+```
+customer_support_pipeline/
+├── __init__.py
+├── config.py              # Constants, model IDs, prompts, schemas, limits
+├── memory.py              # VRAM purging, garbage collection, retry wrappers
+├── audio_utils.py         # FFmpeg conversion, audio loading, resampling, turn slicing
+├── diarization.py         # Pyannote pipeline with TorchAudio CUDA bypass
+├── transcription.py       # Whisper large-v3 quantized vLLM inference
+├── punctuation.py         # Horizon Labs punctuation restoration
+├── alignment.py           # Temporal overlap speaker assignment
+├── intent_extraction.py   # Batched intent extraction & hierarchical consolidation
+├── evaluation.py          # 2-chunk evaluation, LLM merge & deterministic fallback
+├── pipeline.py            # Single-call coordinator with retries & stage checkpoints
+├── batch_processor.py     # Folder scanning, archive extraction, batch summary
+├── main.py                # Command-line interface
+├── requirements.txt       # Pinned dependencies
+└── README.md
+```
+
+---
+
+## Installation
+
+Ensure `ffmpeg` is installed on your system:
+```bash
+sudo apt update && sudo apt install -y ffmpeg
+```
+
+Install Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+Set your Hugging Face Access Token (required for Pyannote Community-1 and model downloads):
+```bash
+export HF_TOKEN="your_huggingface_token"
+```
+
+---
+
+## Usage
+
+### 1. Process a Single Audio File
+```bash
+python -m customer_support_pipeline.main \
+    --input "/path/to/customer_call.mp3" \
+    --output "./output/call_01" \
+    --retries 3
+```
+
+### 2. Process a Folder of Audio Files (Folder Uploading)
+```bash
+python -m customer_support_pipeline.main \
+    --input "/path/to/calls_folder" \
+    --output "./output/batch_results" \
+    --retries 3
+```
+
+### 3. Process an Uploaded ZIP Archive
+```bash
+python -m customer_support_pipeline.main \
+    --input "/path/to/recorded_calls.zip" \
+    --output "./output/unpacked_results"
+```
+
+---
+
+## Python API Usage
+
+You can also import and run the pipeline directly within Python scripts or notebooks:
+
+```python
+from customer_support_pipeline.pipeline import process_single_call
+from customer_support_pipeline.batch_processor import process_audio_folder
+
+# Process single call
+result = process_single_call(
+    input_audio_path="call.mp3",
+    output_dir="./output/call_1",
+    hf_token="your_hf_token",
+    resume=True,
+    clean_intermediate=True,
+)
+
+# Process entire directory
+summary = process_audio_folder(
+    input_folder="./calls/",
+    output_base_dir="./batch_output/",
+    hf_token="your_hf_token",
+    max_retries=3,
+    resume=True,
+)
+```
+
+---
+
+## Deliverables Generated
+
+For each call, the final deliverables preserved in the output directory are:
+1. `call_transcript_with_speakers.json`: Full timestamped transcript with assigned speaker IDs and match confidences.
+2. `intent_extraction.json`: Validated speaker roles, primary customer intent, secondary intents, explicit client needs, and key events.
+3. `call_evaluation.json`: Complete scorecard (professionalism, respectfulness, politeness, total score), categorized evidence quotes, client needs, agent actions, and resolution status.
+4. `pipeline_status.json`: Execution metadata, stage runtimes, and status.

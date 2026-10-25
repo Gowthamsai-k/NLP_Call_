@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8faf7" />
+    <title>Callwise · Support intelligence</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Callwise home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>callwise</span>
+        </a>
+        <div class="topbar-right">
+          <span class="local-badge"><span class="live-dot"></span> Local workspace</span>
+          <span class="topbar-divider"></span>
+          <span class="avatar">CS</span>
+        </div>
+      </header>
+
+      <main>
+        <section class="welcome-row">
+          <div>
+            <p class="eyebrow">CUSTOMER SUPPORT INTELLIGENCE</p>
+            <h1>Every conversation,<br /><span>clearer.</span></h1>
+            <p class="welcome-copy">Turn call recordings into useful transcripts, customer intent, and quality insights.</p>
+          </div>
+          <div class="welcome-art" aria-hidden="true">
+            <div class="art-orbit orbit-one"></div>
+            <div class="art-orbit orbit-two"></div>
+            <div class="art-note"><span class="art-wave">〰</span><span class="art-caption">listening<br />closely</span></div>
+            <span class="art-spark spark-a">✳</span><span class="art-spark spark-b">✦</span>
+          </div>
+        </section>
+
+        <section class="workspace-grid">
+          <section class="panel upload-panel" aria-labelledby="upload-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">NEW ANALYSIS</p>
+                <h2 id="upload-heading">Add your recordings</h2>
+              </div>
+              <span class="step-pill">01 <span>/ 02</span></span>
+            </div>
+
+            <div class="mode-tabs" role="tablist" aria-label="Choose input type">
+              <button class="mode-tab active" data-mode="single" role="tab" aria-selected="true">
+                <span class="tab-icon icon-audio">♫</span> Single audio
+              </button>
+              <button class="mode-tab" data-mode="folder" role="tab" aria-selected="false">
+                <span class="tab-icon icon-folder">▱</span> Folder
+              </button>
+              <button class="mode-tab" data-mode="zip" role="tab" aria-selected="false">
+                <span class="tab-icon icon-zip">◇</span> ZIP archive
+              </button>
+            </div>
+
+            <input id="single-input" class="visually-hidden" type="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.aac,.opus,.webm,.wma,audio/*" />
+            <input id="folder-input" class="visually-hidden" type="file" webkitdirectory directory multiple />
+            <input id="zip-input" class="visually-hidden" type="file" accept=".zip,application/zip" />
+
+            <button id="drop-zone" class="drop-zone" type="button">
+              <span class="upload-symbol" aria-hidden="true">
+                <svg viewBox="0 0 48 48" role="presentation"><path d="M24 31V8m0 0-8 8m8-8 8 8M9 29v8a3 3 0 0 0 3 3h24a3 3 0 0 0 3-3v-8" /></svg>
+              </span>
+              <span class="drop-title" id="drop-title">Drop an audio file here</span>
+              <span class="drop-subtitle" id="drop-subtitle">or <span>browse your files</span></span>
+              <span class="format-note" id="format-note">MP3, WAV, M4A and more · Folder or ZIP supported</span>
+            </button>
+
+            <div id="file-queue" class="file-queue hidden" aria-live="polite"></div>
+
+            <div class="upload-footer">
+              <div class="privacy-note"><span class="lock-icon">⌑</span><span>Files stay in this local workspace</span></div>
+              <button id="start-button" class="primary-button" type="button" disabled>
+                <span>Analyze recordings</span><span aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <p id="upload-error" class="error-message hidden" role="alert"></p>
+          </section>
+
+          <aside class="panel run-panel" aria-labelledby="run-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">WORKSPACE</p>
+                <h2 id="run-heading">Analysis status</h2>
+              </div>
+              <span id="job-status" class="status-badge idle"><span class="status-dot"></span> Ready</span>
+            </div>
+
+            <div id="empty-run" class="empty-run">
+              <div class="empty-illustration" aria-hidden="true">
+                <span class="empty-page page-back"></span><span class="empty-page page-front"><i></i><i></i><i></i></span>
+                <span class="empty-star">✦</span>
+              </div>
+              <h3>Your next insight starts here</h3>
+              <p>Add a recording to see progress and explore the results in this space.</p>
+              <div class="mini-steps"><span><b>1</b> Upload</span><i></i><span><b>2</b> Explore</span></div>
+            </div>
+
+            <div id="run-content" class="run-content hidden">
+              <div class="job-meta"><span id="job-label">Preparing analysis</span><span id="job-percent">0%</span></div>
+              <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+              <p id="job-stage" class="job-stage">Waiting for files</p>
+              <div id="current-file-row" class="current-file-row hidden"><span class="file-mini-icon">♫</span><span id="current-file" class="truncate"></span></div>
+
+              <div class="results-heading"><div><p class="eyebrow">YOUR RESULTS</p><h3>Recordings <span id="result-count">0</span></h3></div><span class="sort-label">Newest first ↓</span></div>
+              <div id="call-list" class="call-list"></div>
+              <div id="batch-summary" class="batch-summary hidden"></div>
+              <p id="job-error" class="error-message hidden" role="alert"></p>
+            </div>
+          </aside>
+        </section>
+
+        <section id="details-panel" class="panel details-panel hidden" aria-labelledby="details-heading">
+          <div class="details-topline">
+            <div class="details-title-wrap">
+              <button id="close-details" class="back-button" type="button" aria-label="Close details">←</button>
+              <div><p class="eyebrow">RECORDING DETAILS</p><h2 id="details-heading">Call details</h2></div>
+            </div>
+            <span class="detail-complete"><span class="live-dot"></span> Analysis complete</span>
+          </div>
+          <div class="detail-tabs" role="tablist" aria-label="Call results">
+            <button class="detail-tab active" data-detail="transcript" role="tab" aria-selected="true"><span class="detail-tab-icon">☷</span> Transcript</button>
+            <button class="detail-tab" data-detail="intent" role="tab" aria-selected="false"><span class="detail-tab-icon">◎</span> Customer intent</button>
+            <button class="detail-tab" data-detail="evaluation" role="tab" aria-selected="false"><span class="detail-tab-icon">✧</span> Call evaluation</button>
+          </div>
+          <div id="detail-content" class="detail-content"></div>
+        </section>
+      </main>
+
+      <footer class="footer"><span>CALLWISE <i>·</i> LOCAL ANALYSIS</span><span>Built for better conversations</span></footer>
+    </div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
