@@ -2,6 +2,9 @@
 Customer Support Call Intelligence Pipeline Package.
 """
 
+# Apply compatibility shims before importing submodules
+from .core import shims  # noqa: F401
+
 from .orchestration.pipeline import process_single_call
 from .orchestration.batch_runner import process_audio_folder, unpack_archive
 

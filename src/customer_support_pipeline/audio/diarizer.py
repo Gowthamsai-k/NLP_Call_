@@ -37,12 +37,27 @@ def run_diarization(
             "Hugging Face token not found. Please provide hf_token or set the HF_TOKEN environment variable."
         )
 
-    _actual_cuda_version = getattr(torch.version, "cuda", None)
-    torch.version.cuda = "13.0"
+    # Ensure token is registered with Hugging Face Hub environment
+    os.environ["HF_TOKEN"] = token
+    os.environ["HUGGING_FACE_HUB_TOKEN"] = token
+    try:
+        from huggingface_hub import login
+        login(token=token, add_to_git_credential=False)
+    except Exception:
+        pass
+
     try:
         from pyannote.audio import Pipeline
-    finally:
-        torch.version.cuda = _actual_cuda_version
+    except RuntimeError as e:
+        if "different CUDA versions" in str(e) or "compiled with different CUDA" in str(e):
+            try:
+                import torchaudio._extension.utils as _tau
+                _tau._check_cuda_version = lambda: None
+                from pyannote.audio import Pipeline
+            except Exception:
+                raise e
+        else:
+            raise e
 
     try:
         import numpy._core.strings as _np_strings
@@ -62,11 +77,70 @@ def run_diarization(
 
     try:
         log_vram("Before Diarization")
-        pipeline = Pipeline.from_pretrained(DIARIZATION_MODEL_ID, token=token)
+
+        # Explicitly allowlist pyannote task types for PyTorch 2.6+ unpickler
+        try:
+            from pyannote.audio.core.task import Specifications, Problem, Resolution
+            torch.serialization.add_safe_globals([Specifications, Problem, Resolution])
+        except Exception:
+            pass
+        try:
+            from torch.torch_version import TorchVersion
+            torch.serialization.add_safe_globals([TorchVersion])
+        except Exception:
+            pass
+
+        # Try supported token passing conventions across pyannote versions
+        pipeline = None
+        last_err = None
+        models_to_try = [DIARIZATION_MODEL_ID, "pyannote/speaker-diarization-3.1"]
+
+        for model_id in models_to_try:
+            for kwargs in [{"token": token}, {"use_auth_token": token}, {}]:
+                try:
+                    pipeline = Pipeline.from_pretrained(model_id, **kwargs)
+                    if pipeline is not None:
+                        logger.info(f"Loaded diarization pipeline: {model_id}")
+                        break
+                except TypeError as te:
+                    last_err = te
+                    if "unexpected keyword argument 'token'" in str(te) or "unexpected keyword argument 'use_auth_token'" in str(te):
+                        continue
+                    if "plda" in str(te):
+                        # PLDA requires pyannote.audio 4.0; try next model if on 3.x
+                        break
+                    continue
+                except Exception as exc:
+                    last_err = exc
+                    break
+            if pipeline is not None:
+                break
+
+        if pipeline is None:
+            if last_err:
+                raise last_err
+            raise RuntimeError(f"Failed to load diarization pipeline: {DIARIZATION_MODEL_ID}")
+
         pipeline.to(target_device)
 
+        # Pre-load audio directly with soundfile to bypass TorchCodec / torchaudio.load entirely
+        audio_data, sr = sf.read(audio_path, dtype="float32")
+        if audio_data.ndim == 1:
+            waveform_tensor = torch.from_numpy(audio_data).unsqueeze(0)
+        else:
+            waveform_tensor = torch.from_numpy(audio_data.T)
+
+        diarization_input = {
+            "waveform": waveform_tensor,
+            "sample_rate": sr,
+        }
+
         with torch.inference_mode():
-            result = pipeline(audio_path)
+            try:
+                result = pipeline(diarization_input)
+            except Exception as exc:
+                logger.debug(f"Direct waveform dict failed ({exc}), falling back to audio file path...")
+                result = pipeline(audio_path)
 
         annotation = getattr(result, "speaker_diarization", result)
 

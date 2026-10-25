@@ -1,0 +1,17 @@
+{
+  "audio_file": "anusha_v_nexteducation_in__Support__112__-1__7010327895__2026-10-19_17-48-55.mp3",
+  "input_path": "/mnt/c/Users/Harshith/Downloads/anusha_v_nexteducation_in__Support__112__-1__7010327895__2026-10-19_17-48-55.mp3",
+  "output_dir": "/mnt/c/Users/Harshith/NLP_Call_/output/anusha_call",
+  "stages": {
+    "audio_conversion": {
+      "status": "resumed"
+    },
+    "diarization": {
+      "status": "success",
+      "duration_s": 50.53
+    }
+  },
+  "status": "failed",
+  "error": "RuntimeError: [Stage 3 (ASR Transcription)] Failed after 3 attempts: /mnt/c/Users/Harshith/NLP_Call_/.venv/lib/python3.12/site-packages/vllm/_C.abi3.so: undefined symbol: _ZN5torch3jit17parseSchemaOrNameERKSsb",
+  "elapsed_seconds": 63.49
+}

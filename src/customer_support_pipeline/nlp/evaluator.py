@@ -169,29 +169,55 @@ def run_call_evaluation(
     )
 
     from transformers import AutoTokenizer
-    from vllm import LLM, SamplingParams
 
     tokenizer = existing_tokenizer
     if tokenizer is None:
         tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_ID, trust_remote_code=True)
 
     evaluator_llm = existing_llm
-    if evaluator_llm is None:
-        log_vram("Before Qwen Evaluator LLM Load")
-        _orig_stdout, _orig_stderr = sys.stdout, sys.stderr
+    vllm_llm = None
+    hf_llm = None
+
+    if evaluator_llm is not None:
+        if type(evaluator_llm).__name__ == "LLM":
+            vllm_llm = evaluator_llm
+        else:
+            hf_llm = evaluator_llm
+    else:
         try:
-            sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
-            evaluator_llm = LLM(
-                model=LLM_MODEL_ID,
-                dtype="half",
-                trust_remote_code=True,
-                max_model_len=EVAL_MAX_MODEL_LEN,
-                max_num_seqs=1,
-                gpu_memory_utilization=gpu_memory_utilization,
-                disable_log_stats=True,
+            from vllm import LLM, SamplingParams
+            log_vram("Before Qwen Evaluator LLM Load")
+            _orig_stdout, _orig_stderr = sys.stdout, sys.stderr
+            try:
+                sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+                vllm_llm = LLM(
+                    model=LLM_MODEL_ID,
+                    dtype="half",
+                    trust_remote_code=True,
+                    max_model_len=EVAL_MAX_MODEL_LEN,
+                    max_num_seqs=1,
+                    gpu_memory_utilization=gpu_memory_utilization,
+                    disable_log_stats=True,
+                )
+            finally:
+                sys.stdout, sys.stderr = _orig_stdout, _orig_stderr
+            evaluator_llm = vllm_llm
+            logger.info("vLLM Evaluator LLM loaded successfully.")
+        except Exception as vllm_err:
+            logger.warning(
+                f"vLLM engine unavailable ({type(vllm_err).__name__}: {vllm_err}). "
+                "Switching seamlessly to native Hugging Face Transformers Qwen LLM..."
             )
-        finally:
-            sys.stdout, sys.stderr = _orig_stdout, _orig_stderr
+            release_memory()
+            from transformers import AutoModelForCausalLM
+            hf_llm = AutoModelForCausalLM.from_pretrained(
+                LLM_MODEL_ID,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                device_map="auto" if torch.cuda.is_available() else None,
+                trust_remote_code=True,
+            )
+            evaluator_llm = hf_llm
+            logger.info("Hugging Face Qwen LLM loaded successfully.")
 
     def format_chat(system_message: str, user_message: str) -> str:
         messages = [
@@ -214,15 +240,31 @@ def run_call_evaluation(
                 f"exceeds {EVAL_MAX_MODEL_LEN} context limit."
             )
 
-        params = SamplingParams(temperature=0.1, max_tokens=max_new_tokens)
-        outputs = evaluator_llm.generate([formatted], sampling_params=params, use_tqdm=False)
-        result = outputs[0].outputs[0]
-        raw = result.text.strip()
-        if not raw:
-            raise ValueError("Model returned an empty response.")
-        if getattr(result, "finish_reason", None) == "length":
-            logger.warning("Generation reached max_tokens; response may be truncated.")
-        return raw
+        if vllm_llm is not None:
+            from vllm import SamplingParams
+            params = SamplingParams(temperature=0.1, max_tokens=max_new_tokens)
+            outputs = vllm_llm.generate([formatted], sampling_params=params, use_tqdm=False)
+            result = outputs[0].outputs[0]
+            raw = result.text.strip()
+            if not raw:
+                raise ValueError("Model returned an empty response.")
+            if getattr(result, "finish_reason", None) == "length":
+                logger.warning("Generation reached max_tokens; response may be truncated.")
+            return raw
+        else:
+            inputs = tokenizer(formatted, return_tensors="pt").to(hf_llm.device)
+            with torch.inference_mode():
+                out_ids = hf_llm.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=False,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
+            input_len = inputs.input_ids.shape[1]
+            raw = tokenizer.decode(out_ids[0][input_len:], skip_special_tokens=True).strip()
+            if not raw:
+                raise ValueError("Model returned an empty response.")
+            return raw
 
     def generate_json(
         prompt: str,

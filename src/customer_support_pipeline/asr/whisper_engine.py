@@ -1,5 +1,5 @@
 """
-Speech-to-text transcription using RedHatAI/whisper-large-v3-quantized.w8a8 on vLLM.
+Speech-to-text transcription using Whisper (vLLM engine with automatic Hugging Face Transformers fallback).
 """
 
 import os
@@ -30,11 +30,9 @@ def run_transcription(
     output_transcript_path: str,
     gpu_memory_utilization: float = WHISPER_GPU_MEM,
 ) -> List[Dict[str, Any]]:
-    """Transcribes diarized audio turns using quantized Whisper large-v3 on vLLM."""
+    """Transcribes diarized audio turns using Whisper on vLLM or Hugging Face Transformers."""
     os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
 
-    # Crucial: Bypass CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH in Colab
-    # Whisper's Conv1D frontend uses PyTorch native CUDA kernels when cuDNN is disabled
     original_cudnn_state = torch.backends.cudnn.enabled
     torch.backends.cudnn.enabled = False
 
@@ -54,33 +52,52 @@ def run_transcription(
         f"Audio loaded for ASR: {duration:.2f}s at {samplerate} Hz across {len(segments)} turns"
     )
 
-    from vllm import LLM, SamplingParams
+    vllm_llm = None
+    sampling_params = None
+    hf_pipe = None
 
     _orig_stdout = sys.stdout
-    sys.stdout = sys.__stdout__
-
-    llm = None
-    sampling_params = None
-
     try:
-        log_vram("Before Whisper vLLM Load")
-        llm = LLM(
-            model=WHISPER_MODEL_ID,
-            dtype="half",
-            trust_remote_code=True,
-            max_model_len=WHISPER_MAX_MODEL_LEN,
-            max_num_batched_tokens=WHISPER_MAX_BATCHED_TOKENS,
-            max_num_seqs=1,
-            limit_mm_per_prompt={"audio": 1},
-            gpu_memory_utilization=gpu_memory_utilization,
-            disable_log_stats=True,
-        )
-        sys.stdout = _orig_stdout
+        # 1. Attempt to initialize vLLM Whisper engine
+        try:
+            from vllm import LLM, SamplingParams
+            log_vram("Before Whisper vLLM Load")
+            sys.stdout = sys.__stdout__
+            vllm_llm = LLM(
+                model=WHISPER_MODEL_ID,
+                dtype="half",
+                trust_remote_code=True,
+                max_model_len=WHISPER_MAX_MODEL_LEN,
+                max_num_batched_tokens=WHISPER_MAX_BATCHED_TOKENS,
+                max_num_seqs=1,
+                limit_mm_per_prompt={"audio": 1},
+                gpu_memory_utilization=gpu_memory_utilization,
+                disable_log_stats=True,
+            )
+            sampling_params = SamplingParams(
+                temperature=0.0,
+                max_tokens=WHISPER_MAX_TOKENS,
+            )
+            logger.info("vLLM Whisper engine initialized successfully.")
+        except Exception as vllm_err:
+            logger.warning(
+                f"vLLM engine unavailable ({type(vllm_err).__name__}: {vllm_err}). "
+                "Switching seamlessly to native Hugging Face Transformers ASR pipeline..."
+            )
+            release_memory()
+            from transformers import pipeline as make_pipeline
+            target_device = 0 if torch.cuda.is_available() else -1
+            fallback_model = "openai/whisper-large-v3-turbo"
+            logger.info(f"Loading native Hugging Face Whisper ASR ({fallback_model}) on device {target_device}...")
+            hf_pipe = make_pipeline(
+                "automatic-speech-recognition",
+                model=fallback_model,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                device=target_device,
+            )
+            logger.info("Hugging Face Whisper ASR pipeline ready.")
 
-        sampling_params = SamplingParams(
-            temperature=0.0,
-            max_tokens=WHISPER_MAX_TOKENS,
-        )
+        sys.stdout = _orig_stdout
 
         transcript_segments = []
         failed_segments = 0
@@ -95,18 +112,23 @@ def run_transcription(
                 continue
 
             try:
-                inputs = {
-                    "encoder_prompt": {
-                        "prompt": "",
-                        "multi_modal_data": {
-                            "audio": (turn_audio, samplerate),
+                if vllm_llm is not None:
+                    inputs = {
+                        "encoder_prompt": {
+                            "prompt": "",
+                            "multi_modal_data": {
+                                "audio": (turn_audio, samplerate),
+                            },
                         },
-                    },
-                    "decoder_prompt": "<|startoftranscript|>",
-                }
+                        "decoder_prompt": "<|startoftranscript|>",
+                    }
+                    outputs = vllm_llm.generate([inputs], sampling_params=sampling_params, use_tqdm=False)
+                    text = outputs[0].outputs[0].text.strip()
+                else:
+                    # Hugging Face Transformers pipeline processing
+                    hf_res = hf_pipe({"raw": turn_audio, "sampling_rate": samplerate})
+                    text = hf_res.get("text", "").strip()
 
-                outputs = llm.generate([inputs], sampling_params=sampling_params, use_tqdm=False)
-                text = outputs[0].outputs[0].text.strip()
             except Exception as exc:
                 failed_segments += 1
                 logger.error(
@@ -141,5 +163,5 @@ def run_transcription(
     finally:
         sys.stdout = _orig_stdout
         torch.backends.cudnn.enabled = original_cudnn_state
-        release_memory(llm, sampling_params)
+        release_memory(vllm_llm, sampling_params, hf_pipe)
         log_vram("After Whisper Cleanup")

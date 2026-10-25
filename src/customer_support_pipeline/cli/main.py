@@ -8,6 +8,9 @@ import argparse
 import logging
 from pathlib import Path
 
+# Compatibility shims for modern torch/torchaudio/numpy
+from ..core import shims  # noqa: F401
+
 from ..core.config import (
     DEFAULT_STAGE_RETRIES,
     RETRY_BACKOFF_FACTOR,
