@@ -92,3 +92,30 @@ try:
     _np_strings._override___module__ = lambda: None
 except Exception:
     pass
+
+# 4. Patch huggingface_hub.hf_hub_download to accept legacy use_auth_token
+try:
+    import huggingface_hub
+    import huggingface_hub.file_download
+    _orig_hf_hub_download = huggingface_hub.file_download.hf_hub_download
+
+    def _compat_hf_hub_download(*args, **kwargs):
+        if "use_auth_token" in kwargs:
+            val = kwargs.pop("use_auth_token")
+            if "token" not in kwargs and val is not None:
+                kwargs["token"] = val
+        return _orig_hf_hub_download(*args, **kwargs)
+
+    huggingface_hub.hf_hub_download = _compat_hf_hub_download
+    huggingface_hub.file_download.hf_hub_download = _compat_hf_hub_download
+
+    for mod_name in [
+        "pyannote.audio.core.pipeline",
+        "pyannote.audio.core.model",
+        "pyannote.audio.pipelines.speaker_verification",
+    ]:
+        if mod_name in importlib.sys.modules:
+            setattr(importlib.sys.modules[mod_name], "hf_hub_download", _compat_hf_hub_download)
+except Exception:
+    pass
+

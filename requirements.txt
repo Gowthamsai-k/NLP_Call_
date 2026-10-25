@@ -15,10 +15,10 @@ huggingface-hub>=0.25.0
 safetensors>=0.4.5
 tokenizers>=0.20.0
 
-# Audio Processing (NumPy constrained <2.0 for ABI stability)
+# Audio Processing
 soundfile>=0.12.1
 librosa>=0.10.2
-numpy>=1.26.0,<2.0.0
+numpy>=1.26.0
 
 # System & Monitoring
 psutil>=5.9.0

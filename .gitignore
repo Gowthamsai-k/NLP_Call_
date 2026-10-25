@@ -1,0 +1,43 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Outputs, caches, and test runs
+output/
+outputs/
+*.wav
+*.mp3
+*.flac
+*.m4a
+.locks/
+.cache/
+
+# System and IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

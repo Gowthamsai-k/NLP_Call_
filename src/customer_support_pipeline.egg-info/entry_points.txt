@@ -1,2 +1,0 @@
-[console_scripts]
-csp-run = customer_support_pipeline.cli.main:main

@@ -27,6 +27,12 @@ def run_diarization(
     token = hf_token or os.environ.get("HF_TOKEN")
     if not token:
         try:
+            import huggingface_hub
+            token = huggingface_hub.get_token()
+        except Exception:
+            pass
+    if not token:
+        try:
             from google.colab import userdata
             token = userdata.get("HF_TOKEN")
         except Exception:
@@ -90,13 +96,22 @@ def run_diarization(
         except Exception:
             pass
 
+        # Ensure hf_hub_download accepts use_auth_token in pyannote modules
+        try:
+            import pyannote.audio.core.pipeline as _pacp
+            import huggingface_hub
+            if hasattr(huggingface_hub, "hf_hub_download"):
+                _pacp.hf_hub_download = huggingface_hub.hf_hub_download
+        except Exception:
+            pass
+
         # Try supported token passing conventions across pyannote versions
         pipeline = None
         last_err = None
         models_to_try = [DIARIZATION_MODEL_ID, "pyannote/speaker-diarization-3.1"]
 
         for model_id in models_to_try:
-            for kwargs in [{"token": token}, {"use_auth_token": token}, {}]:
+            for kwargs in [{"use_auth_token": token}, {"token": token}, {}]:
                 try:
                     pipeline = Pipeline.from_pretrained(model_id, **kwargs)
                     if pipeline is not None:
@@ -104,7 +119,7 @@ def run_diarization(
                         break
                 except TypeError as te:
                     last_err = te
-                    if "unexpected keyword argument 'token'" in str(te) or "unexpected keyword argument 'use_auth_token'" in str(te):
+                    if "unexpected keyword argument" in str(te):
                         continue
                     if "plda" in str(te):
                         # PLDA requires pyannote.audio 4.0; try next model if on 3.x

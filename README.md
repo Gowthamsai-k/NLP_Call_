@@ -1,6 +1,33 @@
 # Customer Support Call Intelligence Pipeline
 
-A modular, production-ready Python project converted directly from the single-model VRAM notebook. It processes customer support audio calls end-to-end: diarization, speech-to-text, punctuation restoration, speaker alignment, intent extraction, and call quality evaluation.
+A modular, production-ready speech intelligence pipeline that processes customer support audio calls end-to-end: speaker diarization, speech-to-text (ASR), punctuation restoration, speaker-turn alignment, intent extraction, and call quality evaluation.
+
+---
+
+## 🌅 Quickstart: Running Tomorrow Morning in WSL
+
+When you start your laptop, simply open **PowerShell** or **Terminal** and run these 3 commands:
+
+### 1. Open WSL
+```bash
+wsl
+```
+
+### 2. Navigate to project & activate virtual environment
+```bash
+cd /mnt/c/Users/Harshith/NLP_Call_
+source .venv/bin/activate
+```
+
+### 3. Run the pipeline on any audio call
+```bash
+python main.py \
+    --input "/mnt/c/Users/Harshith/Downloads/anusha_v_nexteducation_in__Support__112__-1__7042757684__2026-10-22_13-24-52.mp3" \
+    --output "./output/anusha_call_2"
+```
+
+> [!NOTE]
+> The pipeline automatically **checkpoints and resumes**: completed stages are skipped in seconds.
 
 ---
 
@@ -13,7 +40,7 @@ A modular, production-ready Python project converted directly from the single-mo
 
 2. **Aggressive Unused Memory Release**:
    - Sequential model execution: only one model resides in GPU VRAM at a time.
-   - Explicit teardown of vLLM engines and PyTorch pipelines (`release_memory()`).
+   - Explicit teardown of model pipelines (`release_memory()`).
    - Runs `gc.collect()`, `torch.cuda.empty_cache()`, `torch.cuda.ipc_collect()`, and stream synchronization between stages to eliminate runtime OOM crashes.
 
 3. **Stage-Level & Generation Retries**:
@@ -53,10 +80,10 @@ Raw Audio (.mp3, .wav, .m4a, etc.)
 [Stage 5: Speaker Alignment] ──────> call_transcript_with_speakers.json (Deliverable 1)
   │
   ▼
-[Stage 6: Qwen3 Intent Extraction] > intent_extraction.json (Deliverable 2)
+[Stage 6: Qwen Intent Extraction] ─> intent_extraction.json (Deliverable 2)
   │
   ▼
-[Stage 7: Qwen3 Call Evaluation] ──> call_evaluation.json (Deliverable 3)
+[Stage 7: Qwen Call Evaluation] ───> call_evaluation.json (Deliverable 3)
   │ (Release Qwen VRAM)
   ▼
 [Stage 8: Cleanup] ────────────────> Removes temporary WAV and intermediate files
@@ -67,97 +94,33 @@ Raw Audio (.mp3, .wav, .m4a, etc.)
 ## Project Structure
 
 ```
-customer_support_pipeline/
-├── __init__.py
-├── config.py              # Constants, model IDs, prompts, schemas, limits
-├── memory.py              # VRAM purging, garbage collection, retry wrappers
-├── audio_utils.py         # FFmpeg conversion, audio loading, resampling, turn slicing
-├── diarization.py         # Pyannote pipeline with TorchAudio CUDA bypass
-├── transcription.py       # Whisper large-v3 quantized vLLM inference
-├── punctuation.py         # Horizon Labs punctuation restoration
-├── alignment.py           # Temporal overlap speaker assignment
-├── intent_extraction.py   # Batched intent extraction & hierarchical consolidation
-├── evaluation.py          # 2-chunk evaluation, LLM merge & deterministic fallback
-├── pipeline.py            # Single-call coordinator with retries & stage checkpoints
-├── batch_processor.py     # Folder scanning, archive extraction, batch summary
-├── main.py                # Command-line interface
-├── requirements.txt       # Pinned dependencies
+NLP_Call_/
+├── src/
+│   └── customer_support_pipeline/
+│       ├── __init__.py
+│       ├── asr/
+│       │   ├── aligner.py
+│       │   ├── punctuator.py
+│       │   └── whisper_engine.py
+│       ├── audio/
+│       │   ├── diarizer.py
+│       │   └── preprocessor.py
+│       ├── cli/
+│       │   └── main.py
+│       ├── core/
+│       │   ├── config.py
+│       │   ├── memory.py
+│       │   └── shims.py
+│       ├── nlp/
+│       │   ├── evaluator.py
+│       │   └── intent_extractor.py
+│       └── orchestration/
+│           ├── batch_runner.py
+│           └── pipeline.py
+├── main.py
+├── pyproject.toml
+├── requirements.txt
 └── README.md
-```
-
----
-
-## Installation
-
-Ensure `ffmpeg` is installed on your system:
-```bash
-sudo apt update && sudo apt install -y ffmpeg
-```
-
-Install Python dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-Set your Hugging Face Access Token (required for Pyannote Community-1 and model downloads):
-```bash
-export HF_TOKEN="your_huggingface_token"
-```
-
----
-
-## Usage
-
-### 1. Process a Single Audio File
-```bash
-python -m customer_support_pipeline.main \
-    --input "/path/to/customer_call.mp3" \
-    --output "./output/call_01" \
-    --retries 3
-```
-
-### 2. Process a Folder of Audio Files (Folder Uploading)
-```bash
-python -m customer_support_pipeline.main \
-    --input "/path/to/calls_folder" \
-    --output "./output/batch_results" \
-    --retries 3
-```
-
-### 3. Process an Uploaded ZIP Archive
-```bash
-python -m customer_support_pipeline.main \
-    --input "/path/to/recorded_calls.zip" \
-    --output "./output/unpacked_results"
-```
-
----
-
-## Python API Usage
-
-You can also import and run the pipeline directly within Python scripts or notebooks:
-
-```python
-from customer_support_pipeline.pipeline import process_single_call
-from customer_support_pipeline.batch_processor import process_audio_folder
-
-# Process single call
-result = process_single_call(
-    input_audio_path="call.mp3",
-    output_dir="./output/call_1",
-    hf_token="your_hf_token",
-    resume=True,
-    clean_intermediate=True,
-)
-
-# Process entire directory
-summary = process_audio_folder(
-    input_folder="./calls/",
-    output_base_dir="./batch_output/",
-    hf_token="your_hf_token",
-    max_retries=3,
-    resume=True,
-)
 ```
 
 ---
@@ -169,4 +132,3 @@ For each call, the final deliverables preserved in the output directory are:
 2. `intent_extraction.json`: Validated speaker roles, primary customer intent, secondary intents, explicit client needs, and key events.
 3. `call_evaluation.json`: Complete scorecard (professionalism, respectfulness, politeness, total score), categorized evidence quotes, client needs, agent actions, and resolution status.
 4. `pipeline_status.json`: Execution metadata, stage runtimes, and status.
-# NLP_Call_
