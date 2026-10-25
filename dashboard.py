@@ -13,4 +13,3 @@ if __name__ == "__main__":
     main()
 
 
-export HF_TOKEN = "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"
