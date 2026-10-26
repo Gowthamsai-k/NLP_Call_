@@ -79,6 +79,11 @@ def parse_json_object(text: str) -> Optional[Dict[str, Any]]:
         # Deduplicate consecutive repeating word/token loops (3+ times)
         cleaned = re.sub(r'(\S+)(\s+\1){3,}', r'\1', cleaned)
 
+        # Strip trailing unclosed keys or dangling colons/commas before closing braces
+        cleaned = re.sub(r':\s*$', ': null', cleaned)
+        cleaned = re.sub(r',\s*"[^"]*"\s*:\s*$', '', cleaned)
+        cleaned = re.sub(r',\s*$', '', cleaned)
+
         stack = []
         in_str = False
         esc = False
@@ -134,6 +139,52 @@ def ensure_list(value: Any) -> list:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def deterministic_merge_intent_records(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Deterministically merges partial intent extraction records when LLM generation truncates or exceeds token limits."""
+    merged = empty_result()
+    all_needs = []
+    all_intents = []
+    all_events = []
+    all_uncertainties = []
+
+    for r in records:
+        if not isinstance(r, dict):
+            continue
+        p_intent = r.get("primary_client_intent")
+        if p_intent and p_intent != "unclear" and merged["primary_client_intent"] == "unclear":
+            merged["primary_client_intent"] = p_intent
+
+        roles = r.get("speaker_roles", {})
+        if isinstance(roles, dict):
+            for role in ("agent", "client"):
+                r_info = roles.get(role, {})
+                if isinstance(r_info, dict) and r_info.get("speaker_id") and not merged["speaker_roles"][role]["speaker_id"]:
+                    merged["speaker_roles"][role] = {
+                        "speaker_id": r_info.get("speaker_id"),
+                        "evidence": r_info.get("evidence", ""),
+                    }
+
+        for need in ensure_list(r.get("client_needs_and_requests")):
+            if need and need not in all_needs:
+                all_needs.append(need)
+        for intent in ensure_list(r.get("secondary_intents")):
+            if intent and intent not in all_intents and intent != merged["primary_client_intent"]:
+                all_intents.append(intent)
+        for evt in ensure_list(r.get("key_events")):
+            if evt and evt not in all_events:
+                all_events.append(evt)
+        for unc in ensure_list(r.get("uncertainties")):
+            if unc and unc not in all_uncertainties:
+                all_uncertainties.append(unc)
+
+    merged["client_needs_and_requests"] = all_needs
+    merged["secondary_intents"] = all_intents
+    merged["key_events"] = all_events
+    all_uncertainties.append("Assembled via deterministic fallback merge due to output token boundaries.")
+    merged["uncertainties"] = all_uncertainties
+    return merged
 
 
 def run_intent_extraction(
@@ -289,10 +340,13 @@ def run_intent_extraction(
     ) -> Dict[str, Any]:
         last_error = None
         curr_msg = user_message
+        curr_max = max_new_tokens
         for attempt in range(retries + 1):
             try:
                 temp = 0.0 if attempt == 0 else 0.2
-                raw = generate_text(system_prompt, curr_msg, max_new_tokens=max_new_tokens, temperature=temp)
+                if attempt > 0:
+                    curr_max = min(int(max_new_tokens * 1.5), 2000)
+                raw = generate_text(system_prompt, curr_msg, max_new_tokens=curr_max, temperature=temp)
                 parsed = parse_json_object(raw)
                 if parsed is not None:
                     return parsed
@@ -302,9 +356,9 @@ def run_intent_extraction(
 
             if attempt < retries:
                 curr_msg += (
-                    "\n\nIMPORTANT: Your previous response could not be parsed as JSON. "
+                    "\n\nIMPORTANT: Your previous response was either truncated or could not be parsed as valid JSON. "
                     "Return exactly one complete, valid JSON object matching the requested schema. "
-                    "Keep the output concise and do not use Markdown."
+                    "Keep the output concise, limit bullet points, and do not use Markdown fences."
                 )
 
         raise RuntimeError(f"JSON generation failed: {last_error}") from last_error
@@ -422,7 +476,12 @@ For secondary_intents, client_needs_and_requests, key_events,
 and uncertainties, use arrays. Keep the response concise but informative.
 Return JSON only.
 """
-            result = generate_json(user_message, system_prompt=INTENT_SYSTEM_PROMPT, max_new_tokens=MAX_BATCH_OUTPUT_TOKENS)
+            try:
+                result = generate_json(user_message, system_prompt=INTENT_SYSTEM_PROMPT, max_new_tokens=MAX_BATCH_OUTPUT_TOKENS)
+            except Exception as b_err:
+                logger.warning(f"Batch {number} extraction encountered error ({b_err}). Recovering via fallback template...")
+                result = empty_result()
+                result["uncertainties"].append(f"Batch {number} exceeded token bounds: {str(b_err)[:80]}")
 
             normalized = empty_result()
             if isinstance(result.get("speaker_roles"), dict):
@@ -490,12 +549,19 @@ Use null for an unknown role. The agent and client must have
 different speaker IDs if both are identified.
 Return JSON only.
 """
-            return generate_json(
-                user_message,
-                system_prompt=INTENT_MERGE_SYSTEM_PROMPT,
-                max_new_tokens=MAX_MERGE_OUTPUT_TOKENS,
-                retries=1,
-            )
+            try:
+                return generate_json(
+                    user_message,
+                    system_prompt=INTENT_MERGE_SYSTEM_PROMPT,
+                    max_new_tokens=MAX_MERGE_OUTPUT_TOKENS,
+                    retries=1,
+                )
+            except Exception as merge_err:
+                logger.warning(
+                    f"Consolidation group {group_number} LLM merge failed ({merge_err}). "
+                    "Assembling via deterministic fallback merge..."
+                )
+                return deterministic_merge_intent_records(records)
 
         current_level = [record["result"] for record in batch_results]
         level_number = 1
