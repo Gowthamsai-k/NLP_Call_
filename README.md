@@ -137,17 +137,15 @@ You can tune parameters via environment variables without modifying code:
 | `HF_TOKEN` | *None* | Hugging Face access token for PyAnnote. |
 | `ASR_LANG` | `en` | Indic-Conformer target language (`en`, `hi`, `ta`, `te`, `kn`, etc.). |
 | `ASR_DECODER` | `ctc` | Indic-Conformer decoder (`ctc` or `rnnt`). |
-| `WHISPER_GPU_MEM` | `0.35` | GPU VRAM fraction allocated for ASR (default 35%). |
-| `INTENT_GPU_MEM` | `0.60` | GPU VRAM fraction for Intent Extraction LLM. |
-| `EVAL_GPU_MEM` | `0.60` | GPU VRAM fraction for Evaluation LLM. |
+| `WHISPER_GPU_MEM` | `0.30` | GPU VRAM fraction allocated for ASR (default 30%, fits ~2.4GB on 8GB VRAM). |
+| `INTENT_GPU_MEM` | `0.85` | GPU VRAM fraction for Intent Extraction LLM (default 85%, fits ~6.8GB on 8GB VRAM). |
+| `EVAL_GPU_MEM` | `0.85` | GPU VRAM fraction for Evaluation LLM (default 85%, fits ~6.8GB on 8GB VRAM). |
+| `INTENT_MAX_MODEL_LEN` | `4096` | Max context window tokens (bounded for 8GB VRAM). |
+| `EVAL_MAX_MODEL_LEN` | `4096` | Max context window tokens (bounded for 8GB VRAM). |
 
-> [!TIP]
-> **For 8GB VRAM GPUs (e.g., RTX 5050 / RTX 2000 Blackwell):**
-> Set tighter memory limits to prevent out-of-memory errors:
-> ```bash
-> export INTENT_GPU_MEM=0.55
-> export EVAL_GPU_MEM=0.55
-> ```
+> [!NOTE]
+> **Out-of-the-Box 8GB VRAM Optimization**:
+> The pipeline is pre-configured to run out-of-the-box on 8GB VRAM GPUs (e.g., RTX 5050, RTX Pro 2000 Blackwell) using `enforce_eager=True` (disabling bulky CUDA graph buffers) and sequential stage execution. If running on larger GPUs (e.g. 15GB T4 or 24GB A10G), you may optionally increase `INTENT_MAX_MODEL_LEN=8192`.
 
 ---
 

@@ -92,13 +92,13 @@ def main():
         "--whisper-gpu-mem",
         type=float,
         default=WHISPER_GPU_MEM,
-        help=f"VRAM fraction for Whisper vLLM (default: {WHISPER_GPU_MEM}). Use 0.25-0.35 on 15GB T4.",
+        help=f"VRAM fraction for Whisper/ASR (default: {WHISPER_GPU_MEM}, optimized for 8GB VRAM).",
     )
     parser.add_argument(
         "--llm-gpu-mem",
         type=float,
         default=INTENT_GPU_MEM,
-        help=f"VRAM fraction for Qwen LLM vLLM (default: {INTENT_GPU_MEM}). Use 0.50-0.60 on 15GB T4.",
+        help=f"VRAM fraction for Qwen LLM vLLM (default: {INTENT_GPU_MEM}, optimized for 8GB VRAM).",
     )
     parser.add_argument(
         "--no-resume",

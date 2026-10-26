@@ -208,6 +208,7 @@ def run_intent_extraction(
                     max_num_seqs=1,
                     gpu_memory_utilization=gpu_memory_utilization,
                     disable_log_stats=True,
+                    enforce_eager=True,
                 )
             finally:
                 sys.stdout, sys.stderr = _orig_stdout, _orig_stderr

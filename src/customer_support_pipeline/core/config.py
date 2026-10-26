@@ -28,19 +28,19 @@ ASR_DECODER = os.environ.get("ASR_DECODER", "ctc")  # 'ctc' or 'rnnt'
 WHISPER_MAX_MODEL_LEN = 448
 WHISPER_MAX_BATCHED_TOKENS = 2048
 WHISPER_MAX_TOKENS = 448
-# Safer defaults for T4 GPU (15GB VRAM)
-WHISPER_GPU_MEM = float(os.environ.get("WHISPER_GPU_MEM", "0.35"))
+# Optimized default for 8GB VRAM (e.g., RTX 5050 / RTX 2000 Blackwell)
+WHISPER_GPU_MEM = float(os.environ.get("WHISPER_GPU_MEM", "0.30"))
 
 # ==============================================================================
 # INTENT EXTRACTION CONFIGURATION
 # ==============================================================================
-INTENT_MAX_MODEL_LEN = 8192
+INTENT_MAX_MODEL_LEN = int(os.environ.get("INTENT_MAX_MODEL_LEN", "4096"))
 MAX_TRANSCRIPT_TOKENS = 2200
 MAX_BATCH_OUTPUT_TOKENS = 1200
 MAX_MERGE_OUTPUT_TOKENS = 1200
 OVERLAP_SEGMENTS = 2
-# Safer default for Colab T4 GPU
-INTENT_GPU_MEM = float(os.environ.get("INTENT_GPU_MEM", "0.60"))
+# Optimized default for 8GB VRAM (allows ~6GB Qwen 2.5 3B fp16 weights + KV cache)
+INTENT_GPU_MEM = float(os.environ.get("INTENT_GPU_MEM", "0.85"))
 
 INTENT_SYSTEM_PROMPT = """
 You are an expert customer-support conversation analyst.
@@ -81,13 +81,14 @@ Return JSON only.
 # ==============================================================================
 # CALL EVALUATION CONFIGURATION
 # ==============================================================================
-EVAL_MAX_MODEL_LEN = 8192
+EVAL_MAX_MODEL_LEN = int(os.environ.get("EVAL_MAX_MODEL_LEN", "4096"))
 CHUNK_TEXT_TOKENS = 1000
 CHUNK_OUTPUT_TOKENS = 1800
 MERGE_OUTPUT_TOKENS = 2200
 MERGE_GROUP_SIZE = 2
 EVAL_MAX_RETRIES = 2
-EVAL_GPU_MEM = float(os.environ.get("EVAL_GPU_MEM", "0.60"))
+# Optimized default for 8GB VRAM (allows ~6GB Qwen 2.5 3B fp16 weights + KV cache)
+EVAL_GPU_MEM = float(os.environ.get("EVAL_GPU_MEM", "0.85"))
 
 EVAL_SYSTEM_PROMPT = """
 You are an expert, independent customer-support quality evaluator.

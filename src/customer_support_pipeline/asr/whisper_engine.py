@@ -85,6 +85,7 @@ def load_asr_model(
                     limit_mm_per_prompt={"audio": 1},
                     gpu_memory_utilization=gpu_memory_utilization,
                     disable_log_stats=True,
+                    enforce_eager=True,
                 )
                 sampling_params = SamplingParams(
                     temperature=0.0,
