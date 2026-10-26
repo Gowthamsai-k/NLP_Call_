@@ -17,13 +17,11 @@ from ..core.memory import release_memory, log_vram
 logger = logging.getLogger(__name__)
 
 
-def run_diarization(
-    audio_path: str,
-    output_metadata_path: str,
+def load_diarization_pipeline(
     hf_token: Optional[str] = None,
     device: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Executes speaker diarization on clean WAV audio and writes call_metadata.json."""
+) -> Any:
+    """Loads and returns the PyAnnote diarization pipeline onto the target device once."""
     token = hf_token or os.environ.get("HF_TOKEN")
     if not token:
         try:
@@ -43,7 +41,6 @@ def run_diarization(
             "Hugging Face token not found. Please provide hf_token or set the HF_TOKEN environment variable."
         )
 
-    # Ensure token is registered with Hugging Face Hub environment
     os.environ["HF_TOKEN"] = token
     os.environ["HUGGING_FACE_HUB_TOKEN"] = token
     try:
@@ -72,71 +69,81 @@ def run_diarization(
         pass
 
     target_device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
-    logger.info(f"Running Diarization on device: {target_device}")
+    logger.info(f"Loading Diarization pipeline on device: {target_device}")
 
+    try:
+        from pyannote.audio.core.task import Specifications, Problem, Resolution
+        torch.serialization.add_safe_globals([Specifications, Problem, Resolution])
+    except Exception:
+        pass
+    try:
+        from torch.torch_version import TorchVersion
+        torch.serialization.add_safe_globals([TorchVersion])
+    except Exception:
+        pass
+
+    try:
+        import pyannote.audio.core.pipeline as _pacp
+        import huggingface_hub
+        if hasattr(huggingface_hub, "hf_hub_download"):
+            _pacp.hf_hub_download = huggingface_hub.hf_hub_download
+    except Exception:
+        pass
+
+    pipeline = None
+    last_err = None
+    models_to_try = [DIARIZATION_MODEL_ID, "pyannote/speaker-diarization-3.1"]
+
+    for model_id in models_to_try:
+        for kwargs in [{"use_auth_token": token}, {"token": token}, {}]:
+            try:
+                pipeline = Pipeline.from_pretrained(model_id, **kwargs)
+                if pipeline is not None:
+                    logger.info(f"Loaded diarization pipeline: {model_id}")
+                    break
+            except TypeError as te:
+                last_err = te
+                if "unexpected keyword argument" in str(te):
+                    continue
+                if "plda" in str(te):
+                    break
+                continue
+            except Exception as exc:
+                last_err = exc
+                break
+        if pipeline is not None:
+            break
+
+    if pipeline is None:
+        if last_err:
+            raise last_err
+        raise RuntimeError(f"Failed to load diarization pipeline: {DIARIZATION_MODEL_ID}")
+
+    pipeline.to(target_device)
+    return pipeline
+
+
+def run_diarization(
+    audio_path: str,
+    output_metadata_path: str,
+    hf_token: Optional[str] = None,
+    device: Optional[str] = None,
+    existing_pipeline: Optional[Any] = None,
+    release_after: bool = True,
+) -> Dict[str, Any]:
+    """Executes speaker diarization on clean WAV audio and writes call_metadata.json."""
     original_cudnn_state = torch.backends.cudnn.enabled
     torch.backends.cudnn.enabled = False
 
-    pipeline = None
+    pipeline = existing_pipeline
     result = None
     annotation = None
 
     try:
         log_vram("Before Diarization")
 
-        # Explicitly allowlist pyannote task types for PyTorch 2.6+ unpickler
-        try:
-            from pyannote.audio.core.task import Specifications, Problem, Resolution
-            torch.serialization.add_safe_globals([Specifications, Problem, Resolution])
-        except Exception:
-            pass
-        try:
-            from torch.torch_version import TorchVersion
-            torch.serialization.add_safe_globals([TorchVersion])
-        except Exception:
-            pass
-
-        # Ensure hf_hub_download accepts use_auth_token in pyannote modules
-        try:
-            import pyannote.audio.core.pipeline as _pacp
-            import huggingface_hub
-            if hasattr(huggingface_hub, "hf_hub_download"):
-                _pacp.hf_hub_download = huggingface_hub.hf_hub_download
-        except Exception:
-            pass
-
-        # Try supported token passing conventions across pyannote versions
-        pipeline = None
-        last_err = None
-        models_to_try = [DIARIZATION_MODEL_ID, "pyannote/speaker-diarization-3.1"]
-
-        for model_id in models_to_try:
-            for kwargs in [{"use_auth_token": token}, {"token": token}, {}]:
-                try:
-                    pipeline = Pipeline.from_pretrained(model_id, **kwargs)
-                    if pipeline is not None:
-                        logger.info(f"Loaded diarization pipeline: {model_id}")
-                        break
-                except TypeError as te:
-                    last_err = te
-                    if "unexpected keyword argument" in str(te):
-                        continue
-                    if "plda" in str(te):
-                        # PLDA requires pyannote.audio 4.0; try next model if on 3.x
-                        break
-                    continue
-                except Exception as exc:
-                    last_err = exc
-                    break
-            if pipeline is not None:
-                break
-
         if pipeline is None:
-            if last_err:
-                raise last_err
-            raise RuntimeError(f"Failed to load diarization pipeline: {DIARIZATION_MODEL_ID}")
-
-        pipeline.to(target_device)
+            pipeline = load_diarization_pipeline(hf_token=hf_token, device=device)
 
         # Pre-load audio directly with soundfile to bypass TorchCodec / torchaudio.load entirely
         audio_data, sr = sf.read(audio_path, dtype="float32")
@@ -203,5 +210,8 @@ def run_diarization(
 
     finally:
         torch.backends.cudnn.enabled = original_cudnn_state
-        release_memory(pipeline, result, annotation)
-        log_vram("After Diarization Cleanup")
+        if release_after:
+            release_memory(pipeline, result, annotation)
+            log_vram("After Diarization Cleanup")
+        else:
+            release_memory(result, annotation)

@@ -125,111 +125,83 @@ def run_pipeline_worker(job_id: str, temp_upload_dir: Path, uploaded_files: list
         output_base = PROJECT_ROOT / "output"
         output_base.mkdir(parents=True, exist_ok=True)
 
-        for idx, audio_path in enumerate(target_audio_files, start=1):
-            def make_stage_cb(target_fname: str, cur_idx: int, tot_files: int):
-                def cb(stage_num: int, stage_name: str):
-                    with JOBS_LOCK:
-                        job = JOBS.get(job_id)
-                        if not job:
-                            return
-                        job["current_file"] = target_fname
-                        job["current_stage_num"] = stage_num
-                        job["current_stage_name"] = stage_name
-                        job["current_stage"] = f"[{cur_idx}/{tot_files}] {target_fname} -> Stage {stage_num}/8: {stage_name}"
-                        for item in job["files"]:
-                            if item["filename"] == target_fname:
-                                item["status"] = "processing"
-                                item["stage_num"] = stage_num
-                                item["stage_name"] = stage_name
-                                break
-                        job["updated_at"] = time.time()
-                return cb
+        from src.customer_support_pipeline.orchestration.batch_runner import process_batch_by_stages
 
-            stage_cb = make_stage_cb(audio_path.name, idx, len(target_audio_files))
-
+        def on_batch_stage(target_fname: str, stage_num: int, stage_name: str):
             with JOBS_LOCK:
-                JOBS[job_id]["current_file"] = audio_path.name
-                JOBS[job_id]["current_stage_num"] = 1
-                JOBS[job_id]["current_stage_name"] = "Starting Audio Pipeline"
-                JOBS[job_id]["current_stage"] = f"Processing [{idx}/{len(target_audio_files)}]: {audio_path.name}"
-                for item in JOBS[job_id]["files"]:
-                    if item["filename"] == audio_path.name:
+                job = JOBS.get(job_id)
+                if not job:
+                    return
+                job["current_file"] = target_fname
+                job["current_stage_num"] = stage_num
+                job["current_stage_name"] = stage_name
+                job["current_stage"] = f"{target_fname} -> Stage {stage_num}/8: {stage_name}"
+                for item in job["files"]:
+                    if item["filename"] == target_fname:
                         item["status"] = "processing"
-                        item["stage_num"] = 1
-                        item["stage_name"] = "Starting Pipeline"
+                        item["stage_num"] = stage_num
+                        item["stage_name"] = stage_name
                         break
-                JOBS[job_id]["updated_at"] = time.time()
+                job["updated_at"] = time.time()
 
-            call_stem = audio_path.stem
-            call_out = output_base / call_stem
-            logger.info(f"Job [{job_id}] [{idx}/{len(target_audio_files)}] Processing {audio_path.name} -> {call_out} (ASR Lang: {asr_lang})")
-
-            try:
-                call_res = process_single_call(
-                    input_audio_path=str(audio_path),
-                    output_dir=str(call_out),
-                    clean_intermediate=True,
-                    asr_lang=asr_lang,
-                    asr_decoder=asr_decoder,
-                    stage_callback=stage_cb,
-                )
-
-                eval_path = call_out / "call_evaluation.json"
-                tot_score = None
-                if eval_path.exists():
-                    with eval_path.open("r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    data["audio_file"] = audio_path.name
-                    tot_score = data.get("scorecard", {}).get("total_score")
-                    try:
-                        with eval_path.open("w", encoding="utf-8") as f:
-                            json.dump(data, f, ensure_ascii=False, indent=2)
-                    except Exception:
-                        pass
-
-                    with JOBS_LOCK:
-                        JOBS[job_id]["evaluations"].append({
-                            "id": call_stem,
-                            "filename": audio_path.name,
-                            "data": data,
-                            "path": str(eval_path),
-                        })
-
-                with JOBS_LOCK:
-                    JOBS[job_id]["completed_files"] = idx
-                    for item in JOBS[job_id]["files"]:
-                        if item["filename"] == audio_path.name:
-                            item["status"] = "completed"
-                            item["stage_num"] = 8
-                            item["stage_name"] = "Completed"
-                            item["score"] = tot_score
-                            break
-                    JOBS[job_id]["updated_at"] = time.time()
-
-            except Exception as e:
-                tb = traceback.format_exc()
-                logger.error(f"Job [{job_id}] failed processing {audio_path.name}: {e}\n{tb}")
-                with JOBS_LOCK:
-                    JOBS[job_id]["errors"].append({
-                        "file": audio_path.name,
-                        "error": str(e),
-                        "traceback": tb,
+        def on_file_completed(target_fname: str, eval_data: Dict[str, Any]):
+            with JOBS_LOCK:
+                job = JOBS.get(job_id)
+                if not job:
+                    return
+                tot_score = eval_data.get("scorecard", {}).get("total_score")
+                for item in job["files"]:
+                    if item["filename"] == target_fname:
+                        item["status"] = "completed"
+                        item["stage_num"] = 8
+                        item["stage_name"] = "Completed"
+                        item["score"] = tot_score
+                        break
+                call_stem = Path(target_fname).stem
+                eval_path = output_base / call_stem / "call_evaluation.json"
+                if not any(e["filename"] == target_fname for e in job["evaluations"]):
+                    job["evaluations"].append({
+                        "id": call_stem,
+                        "filename": target_fname,
+                        "data": eval_data,
+                        "path": str(eval_path),
                     })
-                    err_entry = f"Error processing {audio_path.name}: {str(e)}\n\n{tb}"
-                    if not JOBS[job_id]["crash_log"]:
-                        JOBS[job_id]["crash_log"] = err_entry
-                    else:
-                        JOBS[job_id]["crash_log"] += f"\n\n========================================\n{err_entry}"
-                    JOBS[job_id]["completed_files"] = idx
-                    for item in JOBS[job_id]["files"]:
-                        if item["filename"] == audio_path.name:
-                            item["status"] = "failed"
-                            item["stage_name"] = f"Failed: {str(e)[:45]}"
-                            item["error"] = str(e)
-                            break
-                    JOBS[job_id]["updated_at"] = time.time()
+                job["completed_files"] = len(job["evaluations"])
+                job["updated_at"] = time.time()
+
+        batch_result = process_batch_by_stages(
+            audio_files=target_audio_files,
+            output_base_dir=str(output_base),
+            clean_intermediate=True,
+            asr_lang=asr_lang,
+            asr_decoder=asr_decoder,
+            stage_callback=on_batch_stage,
+            file_completed_callback=on_file_completed,
+        )
 
         with JOBS_LOCK:
+            failed_list = batch_result.get("failed_files", [])
+            if failed_list:
+                for f_item in failed_list:
+                    f_name = f_item.get("audio_file")
+                    f_err = f_item.get("error")
+                    JOBS[job_id]["errors"].append(f_item)
+                    for item in JOBS[job_id]["files"]:
+                        if item["filename"] == f_name:
+                            item["status"] = "failed"
+                            item["stage_name"] = f"Failed: {str(f_err)[:45]}"
+                            item["error"] = str(f_err)
+                            break
+                    if not JOBS[job_id]["crash_log"]:
+                        JOBS[job_id]["crash_log"] = f"Error in {f_name}: {f_err}"
+                    else:
+                        JOBS[job_id]["crash_log"] += f"\n\nError in {f_name}: {f_err}"
+
+            for ev_item in batch_result.get("evaluations", []):
+                if not any(e["filename"] == ev_item["filename"] for e in JOBS[job_id]["evaluations"]):
+                    JOBS[job_id]["evaluations"].append(ev_item)
+
+            JOBS[job_id]["completed_files"] = len(JOBS[job_id]["evaluations"])
             if JOBS[job_id]["evaluations"]:
                 JOBS[job_id]["status"] = "completed"
                 JOBS[job_id]["current_stage"] = f"Finished processing {len(JOBS[job_id]['evaluations'])}/{len(target_audio_files)} calls."

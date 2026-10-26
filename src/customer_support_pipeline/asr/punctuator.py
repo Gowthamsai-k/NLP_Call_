@@ -18,9 +18,36 @@ from ..core.memory import release_memory, log_vram
 logger = logging.getLogger(__name__)
 
 
+def load_punctuation_model() -> Any:
+    """Downloads helper and loads Horizon-Labs punctuation model once."""
+    try:
+        log_vram("Before Punctuation Load")
+        helper_path = hf_hub_download(
+            repo_id=PUNCTUATION_MODEL_ID,
+            filename="punctuate.py",
+        )
+
+        spec = importlib.util.spec_from_file_location("horizon_punctuate", helper_path)
+        punctuate_module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = punctuate_module
+        spec.loader.exec_module(punctuate_module)
+
+        punctuator = punctuate_module.Punctuator(PUNCTUATION_MODEL_ID)
+        logger.info("Horizon punctuation model loaded successfully.")
+        return punctuator
+    except Exception as exc:
+        logger.warning(
+            f"Could not load Horizon punctuation model ({type(exc).__name__}: {exc}). "
+            "Proceeding with native ASR punctuation..."
+        )
+        return None
+
+
 def run_punctuation_restoration(
     transcript_or_path: Union[str, Path, List[Dict[str, Any]]],
     output_path: str,
+    existing_punctuator: Optional[Any] = None,
+    release_after: bool = True,
 ) -> List[Dict[str, Any]]:
     """Restores punctuation for transcript segments with graceful fallback to native ASR punctuation."""
     if isinstance(transcript_or_path, (str, Path)):
@@ -33,29 +60,11 @@ def run_punctuation_restoration(
         logger.warning("No transcript segments provided for punctuation restoration.")
         return []
 
-    punctuator = None
+    punctuator = existing_punctuator
 
     try:
-        log_vram("Before Punctuation Load")
-        try:
-            helper_path = hf_hub_download(
-                repo_id=PUNCTUATION_MODEL_ID,
-                filename="punctuate.py",
-            )
-
-            spec = importlib.util.spec_from_file_location("horizon_punctuate", helper_path)
-            punctuate_module = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = punctuate_module
-            spec.loader.exec_module(punctuate_module)
-
-            punctuator = punctuate_module.Punctuator(PUNCTUATION_MODEL_ID)
-            logger.info("Horizon punctuation model loaded successfully.")
-        except Exception as exc:
-            logger.warning(
-                f"Could not load Horizon punctuation model ({type(exc).__name__}: {exc}). "
-                "Proceeding with Whisper's high-quality native punctuation..."
-            )
-            punctuator = None
+        if punctuator is None and existing_punctuator is None:
+            punctuator = load_punctuation_model()
 
         for i, segment in enumerate(transcript_segments):
             raw_text = segment.get("raw_text") or segment.get("text", "")
@@ -88,5 +97,6 @@ def run_punctuation_restoration(
         return transcript_segments
 
     finally:
-        release_memory(punctuator)
-        log_vram("After Punctuation Cleanup")
+        if release_after:
+            release_memory(punctuator)
+            log_vram("After Punctuation Cleanup")

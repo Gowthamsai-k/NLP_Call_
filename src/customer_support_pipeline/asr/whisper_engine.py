@@ -28,37 +28,12 @@ from ..core.memory import release_memory, log_vram
 logger = logging.getLogger(__name__)
 
 
-def run_transcription(
-    audio_path: str,
-    metadata_or_path: Any,
-    output_transcript_path: str,
+def load_asr_model(
     gpu_memory_utilization: float = WHISPER_GPU_MEM,
     language: Optional[str] = None,
     decoder: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Transcribes diarized audio turns using ai4bharat/indic-conformer-600m-multilingual.
-    Falls back gracefully to Whisper if needed.
-    """
-    original_cudnn_state = torch.backends.cudnn.enabled
-    torch.backends.cudnn.enabled = False
-
-    if isinstance(metadata_or_path, (str, Path)):
-        with open(metadata_or_path, "r", encoding="utf-8") as f:
-            metadata = json.load(f)
-    else:
-        metadata = metadata_or_path
-
-    segments = metadata.get("segments", [])
-    if not segments:
-        logger.warning("No diarization segments provided for transcription.")
-        return []
-
-    audio_data, samplerate, duration = load_and_resample_audio(audio_path)
-    logger.info(
-        f"Audio loaded for ASR: {duration:.2f}s at {samplerate} Hz across {len(segments)} turns"
-    )
-
+) -> Dict[str, Any]:
+    """Loads and returns the ASR model bundle (Indic-Conformer or fallback Whisper) onto GPU once."""
     lang_code = language or ASR_LANG or "en"
     decoder_type = decoder or ASR_DECODER or "ctc"
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -132,8 +107,74 @@ def run_transcription(
                     device=target_device,
                 )
                 logger.info("Hugging Face Whisper ASR pipeline ready.")
-
+    finally:
         sys.stdout = _orig_stdout
+
+    return {
+        "indic_model": indic_model,
+        "whisper_pipe": whisper_pipe,
+        "vllm_llm": vllm_llm,
+        "sampling_params": sampling_params,
+        "lang_code": lang_code,
+        "decoder_type": decoder_type,
+    }
+
+
+def run_transcription(
+    audio_path: str,
+    metadata_or_path: Any,
+    output_transcript_path: str,
+    gpu_memory_utilization: float = WHISPER_GPU_MEM,
+    language: Optional[str] = None,
+    decoder: Optional[str] = None,
+    existing_model: Optional[Dict[str, Any]] = None,
+    release_after: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Transcribes diarized audio turns using ai4bharat/indic-conformer-600m-multilingual.
+    Falls back gracefully to Whisper if needed.
+    """
+    original_cudnn_state = torch.backends.cudnn.enabled
+    torch.backends.cudnn.enabled = False
+
+    if isinstance(metadata_or_path, (str, Path)):
+        with open(metadata_or_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+    else:
+        metadata = metadata_or_path
+
+    segments = metadata.get("segments", [])
+    if not segments:
+        logger.warning("No diarization segments provided for transcription.")
+        return []
+
+    audio_data, samplerate, duration = load_and_resample_audio(audio_path)
+    logger.info(
+        f"Audio loaded for ASR: {duration:.2f}s at {samplerate} Hz across {len(segments)} turns"
+    )
+
+    lang_code = language or ASR_LANG or "en"
+    decoder_type = decoder or ASR_DECODER or "ctc"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    if existing_model is not None:
+        indic_model = existing_model.get("indic_model")
+        whisper_pipe = existing_model.get("whisper_pipe")
+        vllm_llm = existing_model.get("vllm_llm")
+        sampling_params = existing_model.get("sampling_params")
+    else:
+        model_bundle = load_asr_model(
+            gpu_memory_utilization=gpu_memory_utilization,
+            language=lang_code,
+            decoder=decoder_type,
+        )
+        indic_model = model_bundle.get("indic_model")
+        whisper_pipe = model_bundle.get("whisper_pipe")
+        vllm_llm = model_bundle.get("vllm_llm")
+        sampling_params = model_bundle.get("sampling_params")
+
+    _orig_stdout = sys.stdout
+    try:
 
         transcript_segments = []
         failed_segments = 0
@@ -209,5 +250,6 @@ def run_transcription(
     finally:
         sys.stdout = _orig_stdout
         torch.backends.cudnn.enabled = original_cudnn_state
-        release_memory(indic_model, vllm_llm, sampling_params, whisper_pipe)
-        log_vram("After ASR Cleanup")
+        if release_after:
+            release_memory(indic_model, vllm_llm, sampling_params, whisper_pipe)
+            log_vram("After ASR Cleanup")
