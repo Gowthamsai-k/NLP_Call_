@@ -1,134 +1,197 @@
-# Customer Support Call Intelligence Pipeline
+# Customer Support Call Intelligence Pipeline (v2)
 
-A modular, production-ready speech intelligence pipeline that processes customer support audio calls end-to-end: speaker diarization, speech-to-text (ASR), punctuation restoration, speaker-turn alignment, intent extraction, and call quality evaluation.
+A modular, production-ready speech intelligence pipeline that processes customer support audio calls end-to-end: speaker diarization, Indic speech-to-text (ASR), punctuation restoration, speaker-turn alignment, intent extraction, and granular call quality evaluation.
 
 ---
 
-## 🌅 Quickstart: Running Tomorrow Morning in WSL
+## 🚀 Key Features in v2
 
-When you start your laptop, simply open **PowerShell** or **Terminal** and run these 3 commands:
+1. **Stage-by-Stage Batch Architecture**:
+   - Each neural model is loaded onto the GPU **only once** for the entire batch of calls:
+     - **PyAnnote Diarization** loaded once $\rightarrow$ diarizes all files $\rightarrow$ unloaded from VRAM.
+     - **Indic-Conformer ASR** loaded once $\rightarrow$ transcribes all files $\rightarrow$ unloaded from VRAM.
+     - **Horizon Punctuation** loaded once $\rightarrow$ restores punctuation for all files $\rightarrow$ unloaded.
+     - **Qwen 2.5 3B LLM** loaded once $\rightarrow$ extracts customer intents & evaluates quality for all files $\rightarrow$ unloaded.
+   - Saves intermediate outputs immediately per file.
+   - Eliminates redundant model loading/offloading overhead by $O(N)$ times.
 
-### 1. Open WSL
+2. **Isolated Failure Segregation (`failed/` directory)**:
+   - Any audio file that encounters an error in any stage is immediately moved into a dedicated `output/failed/<call_stem>/` directory.
+   - Each failed record contains detailed diagnostic files:
+     - `failure_reason.json`: Stage number, error message, audio metadata, and timestamp.
+     - `error.txt`: Human-readable summary for fast terminal inspection.
+   - The top-level `output/` directory contains strictly successful evaluation deliverables, keeping runs clean and production-ready.
+
+3. **Dynamic Differentiated Quality Scoring**:
+   - Evaluates agent performance dynamically with nuanced $\pm 5$ to $\pm 10$ variance across calls rather than static benchmark scores.
+   - Strict rubric covering professionalism, respectfulness, politeness, customer issue resolution, and actionable agent feedback.
+
+4. **Zero-Dependency Web Dashboard with Slide-Over Drawer**:
+   - Built using Python standard library HTTP server (no Flask/FastAPI/Node required).
+   - Real-time 8-stage stepper tracking per file.
+   - Slide-over inspection drawer on the right side with `Next Call ➡️`, `⬅️ Prev Call`, counter, and keyboard shortcuts (`ArrowRight`, `ArrowLeft`, `Escape`).
+
+5. **Safe Memory & Bounded Context**:
+   - KV Cache bounded strictly via vLLM PagedAttention (`gpu_memory_utilization=0.60`).
+   - Transcript chunking and hierarchical map-reduce ensure context windows never exceed model token limits.
+
+---
+
+## 📥 Cloning the Repository (v2)
+
+To clone the `v2-main` branch onto your machine or cloud GPU instance (e.g. Google Colab):
+
 ```bash
-wsl
+# Clone the v2-main branch directly
+git clone -b v2-main https://github.com/Gowthamsai-k/NLP_Call_.git
+cd NLP_Call_
 ```
 
-### 2. Navigate to project & activate virtual environment
+If you already have the repository cloned, switch to `v2-main`:
 ```bash
-cd /mnt/c/Users/Harshith/NLP_Call_
+git fetch origin
+git checkout v2-main
+git pull origin v2-main
+```
+
+---
+
+## 🛠️ Prerequisites & Setup
+
+### 1. System Dependencies (FFmpeg)
+FFmpeg is required for converting raw audio into standard 16 kHz mono PCM WAV:
+
+```bash
+# Ubuntu / Debian / WSL
+sudo apt-get update && sudo apt-get install -y ffmpeg
+
+# macOS (Homebrew)
+brew install ffmpeg
+```
+
+### 2. Python Environment & Dependencies
+Python 3.10+ is recommended.
+
+```bash
+python3 -m venv .venv
 source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-### 3. Run the pipeline on any audio call
+### 3. Hugging Face Authentication Token
+PyAnnote Diarization requires accepting user terms on Hugging Face:
+1. Accept the model terms for [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1).
+2. Set your token as an environment variable:
+
 ```bash
-python main.py \
-    --input "/mnt/c/Users/Harshith/Downloads/anusha_v_nexteducation_in__Support__112__-1__7042757684__2026-10-22_13-24-52.mp3" \
-    --output "./output/anusha_call_2"
-```
-
-> [!NOTE]
-> The pipeline automatically **checkpoints and resumes**: completed stages are skipped in seconds.
-
----
-
-## Key Features
-
-1. **Strict Code Logic Preservation**:
-   - Preserves all prompt templates, system instructions, Indic language handling, token constraints, and validation schemas verbatim.
-   - Retains the exact 7-task intent extraction rules and 8-task call evaluation criteria.
-   - Preserves the deterministic fallback merge for call evaluation.
-
-2. **Aggressive Unused Memory Release**:
-   - Sequential model execution: only one model resides in GPU VRAM at a time.
-   - Explicit teardown of model pipelines (`release_memory()`).
-   - Runs `gc.collect()`, `torch.cuda.empty_cache()`, `torch.cuda.ipc_collect()`, and stream synchronization between stages to eliminate runtime OOM crashes.
-
-3. **Stage-Level & Generation Retries**:
-   - Each pipeline stage is wrapped in exponential backoff retries (`retry_with_memory_cleanup`).
-   - If an out-of-memory or transient CUDA/API error occurs, GPU cache is immediately purged before retrying.
-   - LLM JSON generation includes automatic formatting retry prompts if an invalid JSON response is returned.
-
-4. **Folder Processing & Archive Uploading**:
-   - Supports single audio files, directories of audio files, or `.zip`/`.tar` archives.
-   - In folder mode, each call is isolated in its own subfolder.
-   - Failure resilience: if an individual audio file fails, the error is recorded in `batch_processing_summary.json` and the pipeline continues to subsequent files without interruption.
-
-5. **Resume & Checkpointing**:
-   - Automatically detects previously completed deliverables (`call_transcript_with_speakers.json`, `intent_extraction.json`, `call_evaluation.json`).
-   - Resumes interrupted jobs without re-running expensive model inference stages.
-
----
-
-## Pipeline Stages
-
-```
-Raw Audio (.mp3, .wav, .m4a, etc.)
-  │
-  ▼
-[Stage 1: FFmpeg Conversion] ──────> 16 kHz Mono WAV
-  │
-  ▼
-[Stage 2: Pyannote Diarization] ───> call_metadata.json (Speaker turns)
-  │ (Release Diarization VRAM)
-  ▼
-[Stage 3: Whisper Large v3 ASR] ───> whisper_transcript.json (Turn-by-turn text)
-  │ (Release Whisper VRAM)
-  ▼
-[Stage 4: Horizon Punctuation] ────> horizon_punctuated_transcript.json
-  │ (Release Punctuation VRAM)
-  ▼
-[Stage 5: Speaker Alignment] ──────> call_transcript_with_speakers.json (Deliverable 1)
-  │
-  ▼
-[Stage 6: Qwen Intent Extraction] ─> intent_extraction.json (Deliverable 2)
-  │
-  ▼
-[Stage 7: Qwen Call Evaluation] ───> call_evaluation.json (Deliverable 3)
-  │ (Release Qwen VRAM)
-  ▼
-[Stage 8: Cleanup] ────────────────> Removes temporary WAV and intermediate files
+export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
 ---
 
-## Project Structure
+## 💻 How to Run
 
+### Method 1: Web Dashboard (Interactive UI)
+
+The web dashboard allows you to drag-and-drop audio files or `.zip` archives, track progress in real-time, and inspect scorecards.
+
+```bash
+python3 dashboard_server.py --port 8000
 ```
-NLP_Call_/
-├── src/
-│   └── customer_support_pipeline/
-│       ├── __init__.py
-│       ├── asr/
-│       │   ├── aligner.py
-│       │   ├── punctuator.py
-│       │   └── whisper_engine.py
-│       ├── audio/
-│       │   ├── diarizer.py
-│       │   └── preprocessor.py
-│       ├── cli/
-│       │   └── main.py
-│       ├── core/
-│       │   ├── config.py
-│       │   ├── memory.py
-│       │   └── shims.py
-│       ├── nlp/
-│       │   ├── evaluator.py
-│       │   └── intent_extractor.py
-│       └── orchestration/
-│           ├── batch_runner.py
-│           └── pipeline.py
-├── main.py
-├── pyproject.toml
-├── requirements.txt
-└── README.md
+*(Or via the main wrapper: `python3 main.py --dashboard --port 8000`)*
+
+- Open your browser at: `http://localhost:8000`
+- Upload your calls (`.mp3`, `.wav`, `.m4a`, etc.) or a `.zip` archive.
+- Click **Run Pipeline Analysis**.
+- Watch the live 8-stage stepper update for each file in real-time.
+- Click any call name to open the side-drawer scorecard inspection.
+
+---
+
+### Method 2: Command Line (CLI)
+
+#### Process a Folder of Audio Files (Stage-by-Stage Batch)
+```bash
+python3 main.py --input ./path_to_audio_folder/ --output ./output/
+```
+
+#### Process a Compressed Archive (`.zip`, `.tar`, `.tar.gz`)
+```bash
+python3 main.py --input ./customer_calls.zip --output ./output/
+```
+
+#### Process a Single Audio File
+```bash
+python3 main.py --input ./sample_call.mp3 --output ./output/call_1/
 ```
 
 ---
 
-## Deliverables Generated
+## ⚙️ Configuration & Environment Variables
 
-For each call, the final deliverables preserved in the output directory are:
-1. `call_transcript_with_speakers.json`: Full timestamped transcript with assigned speaker IDs and match confidences.
-2. `intent_extraction.json`: Validated speaker roles, primary customer intent, secondary intents, explicit client needs, and key events.
-3. `call_evaluation.json`: Complete scorecard (professionalism, respectfulness, politeness, total score), categorized evidence quotes, client needs, agent actions, and resolution status.
-4. `pipeline_status.json`: Execution metadata, stage runtimes, and status.
+You can tune parameters via environment variables without modifying code:
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `HF_TOKEN` | *None* | Hugging Face access token for PyAnnote. |
+| `ASR_LANG` | `en` | Indic-Conformer target language (`en`, `hi`, `ta`, `te`, `kn`, etc.). |
+| `ASR_DECODER` | `ctc` | Indic-Conformer decoder (`ctc` or `rnnt`). |
+| `WHISPER_GPU_MEM` | `0.35` | GPU VRAM fraction allocated for ASR (default 35%). |
+| `INTENT_GPU_MEM` | `0.60` | GPU VRAM fraction for Intent Extraction LLM. |
+| `EVAL_GPU_MEM` | `0.60` | GPU VRAM fraction for Evaluation LLM. |
+
+> [!TIP]
+> **For 8GB VRAM GPUs (e.g., RTX 5050 / RTX 2000 Blackwell):**
+> Set tighter memory limits to prevent out-of-memory errors:
+> ```bash
+> export INTENT_GPU_MEM=0.55
+> export EVAL_GPU_MEM=0.55
+> ```
+
+---
+
+## 📂 Output Directory Structure
+
+After execution, deliverables are organized cleanly:
+
+```
+output/
+├── call_01/
+│   └── call_evaluation.json              # Final score deliverable (clean mode)
+├── call_02/
+│   └── call_evaluation.json              # Final score deliverable
+├── failed/                               # Auto-created if any record encounters errors
+│   └── broken_call_03/
+│       ├── failure_reason.json           # Machine-readable error diagnostics
+│       ├── error.txt                     # Human-readable failure summary
+│       └── clean_16k.wav                 # Any partial artifacts generated prior to error
+└── batch_processing_summary.json         # Complete batch execution summary
+```
+
+### Final Evaluation Deliverable (`call_evaluation.json`)
+Contains:
+- `audio_file`: Audio file name.
+- `scorecard`: Numerical scores for `professionalism_score`, `respectfulness_score`, `politeness_score`, and `total_score` (0–100 scale) with detailed rationales.
+- `evidence`: Categorized transcript quote citations supporting the assigned scores.
+- `client_needs`: Explicit issues and needs articulated by the caller.
+- `agent_actions`: Concrete steps taken by the customer service representative.
+- `resolution`: Status (`resolved`, `partially_resolved`, `unresolved`, etc.) with explanation.
+
+---
+
+## 🏗️ Pipeline Architecture Flow
+
+```mermaid
+flowchart TD
+    Audio[Batch of Audio Calls] --> Stage1[Stage 1: FFmpeg 16kHz Mono PCM]
+    Stage1 --> Stage2[Stage 2: PyAnnote 3.1 Diarizer]
+    Stage2 --> Stage3[Stage 3: Indic-Conformer 600M ASR]
+    Stage3 --> Stage4[Stage 4: Horizon Punctuation Restoration]
+    Stage4 --> Stage5[Stage 5: Turn-by-Turn Speaker Alignment]
+    Stage5 --> Stage6[Stage 6: Qwen 2.5 3B Intent Extraction]
+    Stage6 --> Stage7[Stage 7: Qwen 2.5 3B Dynamic Quality Evaluation]
+    Stage7 --> Stage8{Stage 8: Packaging}
+    Stage8 -->|Success| SuccessDir[output/call_name/call_evaluation.json]
+    Stage8 -->|Failure| FailedDir[output/failed/call_name/failure_reason.json]
+```
