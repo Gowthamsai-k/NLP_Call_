@@ -229,7 +229,7 @@ def run_call_evaluation(
     def count_tokens(text: str) -> int:
         return len(tokenizer.encode(text, add_special_tokens=False))
 
-    def generate_text(prompt: str, max_new_tokens: int) -> str:
+    def generate_text(prompt: str, max_new_tokens: int, temperature: float = 0.0) -> str:
         formatted = format_chat(EVAL_SYSTEM_PROMPT, prompt)
         prompt_tokens = count_tokens(formatted)
         available_input = EVAL_MAX_MODEL_LEN - max_new_tokens
@@ -242,7 +242,11 @@ def run_call_evaluation(
 
         if vllm_llm is not None:
             from vllm import SamplingParams
-            params = SamplingParams(temperature=0.1, max_tokens=max_new_tokens)
+            params = SamplingParams(
+                temperature=temperature,
+                max_tokens=max_new_tokens,
+                repetition_penalty=1.1,
+            )
             outputs = vllm_llm.generate([formatted], sampling_params=params, use_tqdm=False)
             result = outputs[0].outputs[0]
             raw = result.text.strip()
@@ -253,13 +257,19 @@ def run_call_evaluation(
             return raw
         else:
             inputs = tokenizer(formatted, return_tensors="pt").to(hf_llm.device)
+            gen_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "pad_token_id": tokenizer.eos_token_id,
+                "repetition_penalty": 1.1,
+            }
+            if temperature > 0.0:
+                gen_kwargs["do_sample"] = True
+                gen_kwargs["temperature"] = temperature
+            else:
+                gen_kwargs["do_sample"] = False
+
             with torch.inference_mode():
-                out_ids = hf_llm.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=tokenizer.eos_token_id,
-                )
+                out_ids = hf_llm.generate(**inputs, **gen_kwargs)
             input_len = inputs.input_ids.shape[1]
             raw = tokenizer.decode(out_ids[0][input_len:], skip_special_tokens=True).strip()
             if not raw:
@@ -278,7 +288,8 @@ def run_call_evaluation(
         for attempt in range(retries + 1):
             raw = ""
             try:
-                raw = generate_text(current_prompt, max_new_tokens=max_new_tokens)
+                temp = 0.0 if attempt == 0 else 0.2
+                raw = generate_text(current_prompt, max_new_tokens=max_new_tokens, temperature=temp)
                 return parse_json_object(raw)
             except Exception as exc:
                 last_error = exc

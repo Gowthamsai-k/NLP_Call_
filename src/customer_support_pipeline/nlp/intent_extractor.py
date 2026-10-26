@@ -199,7 +199,7 @@ def run_intent_extraction(
     def count_tokens(text: str) -> int:
         return len(tokenizer.encode(text, add_special_tokens=False))
 
-    def generate_text(system_prompt: str, user_message: str, max_new_tokens: int) -> str:
+    def generate_text(system_prompt: str, user_message: str, max_new_tokens: int, temperature: float = 0.0) -> str:
         formatted_prompt = format_chat(system_prompt, user_message)
         prompt_tokens = count_tokens(formatted_prompt)
         max_allowed = INTENT_MAX_MODEL_LEN - max_new_tokens
@@ -212,7 +212,11 @@ def run_intent_extraction(
 
         if vllm_llm is not None:
             from vllm import SamplingParams
-            params = SamplingParams(temperature=0.0, max_tokens=max_new_tokens)
+            params = SamplingParams(
+                temperature=temperature,
+                max_tokens=max_new_tokens,
+                repetition_penalty=1.1,
+            )
             outputs = vllm_llm.generate([formatted_prompt], sampling_params=params, use_tqdm=False)
             result = outputs[0].outputs[0]
             if getattr(result, "finish_reason", None) == "length":
@@ -220,13 +224,19 @@ def run_intent_extraction(
             return result.text.strip()
         else:
             inputs = tokenizer(formatted_prompt, return_tensors="pt").to(hf_llm.device)
+            gen_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "pad_token_id": tokenizer.eos_token_id,
+                "repetition_penalty": 1.1,
+            }
+            if temperature > 0.0:
+                gen_kwargs["do_sample"] = True
+                gen_kwargs["temperature"] = temperature
+            else:
+                gen_kwargs["do_sample"] = False
+
             with torch.inference_mode():
-                out_ids = hf_llm.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=tokenizer.eos_token_id,
-                )
+                out_ids = hf_llm.generate(**inputs, **gen_kwargs)
             input_len = inputs.input_ids.shape[1]
             return tokenizer.decode(out_ids[0][input_len:], skip_special_tokens=True).strip()
 
@@ -240,7 +250,8 @@ def run_intent_extraction(
         curr_msg = user_message
         for attempt in range(retries + 1):
             try:
-                raw = generate_text(system_prompt, curr_msg, max_new_tokens=max_new_tokens)
+                temp = 0.0 if attempt == 0 else 0.2
+                raw = generate_text(system_prompt, curr_msg, max_new_tokens=max_new_tokens, temperature=temp)
                 parsed = parse_json_object(raw)
                 if parsed is not None:
                     return parsed
@@ -334,8 +345,8 @@ TASKS
    commitments, outcomes, and unresolved requests.
    Distinguish what was requested from what actually happened.
 
-5. Preserve short, exact transcript excerpts as evidence.
-   Include timestamps and speaker IDs whenever possible.
+5. Preserve short, exact transcript excerpts as evidence (maximum 20 words).
+   Do not repeat words or loops. Include timestamps and speaker IDs whenever possible.
    Do not fabricate quotations or translate uncertain speech by guessing.
 
 6. Use the previous context only as context. The current transcript
