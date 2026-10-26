@@ -90,13 +90,12 @@ EVAL_MAX_RETRIES = 2
 EVAL_GPU_MEM = float(os.environ.get("EVAL_GPU_MEM", "0.60"))
 
 EVAL_SYSTEM_PROMPT = """
-You are an independent customer-support call evaluator.
+You are an expert, independent customer-support quality evaluator.
 Evaluate only the supplied transcript and extracted findings.
-Do not invent events, promises, quotations, or customer details.
+Every call is unique. You must evaluate the agent critically based on the specific transcript and assign varied, dynamic scores that reflect real differences in agent performance. Do NOT output default static numbers like 85 or 90 for every call.
 The call may contain Indian English, Indic languages, and code-switching.
-Use evidence-based reasoning and return exactly one valid JSON object.
-Do not use Markdown fences or text outside JSON.
-Keep explanations concise and output only relevant evidence.
+Account for honorifics, tone, customer responsiveness, and issue resolution.
+Return exactly one valid JSON object without Markdown fences.
 """.strip()
 
 EVAL_SCHEMA = """
@@ -110,10 +109,10 @@ Return one JSON object with exactly this structure:
     "explanation": "string"
   },
   "scorecard": {
-    "professionalism_score": 85.0,
-    "respectfulness_score": 90.0,
-    "politeness_score": 85.0,
-    "total_score": 86.7,
+    "professionalism_score": 0.0,
+    "respectfulness_score": 0.0,
+    "politeness_score": 0.0,
+    "total_score": 0.0,
     "professionalism_rationale": "string",
     "respectfulness_rationale": "string",
     "politeness_rationale": "string",
@@ -129,7 +128,30 @@ Return one JSON object with exactly this structure:
   },
   "uncertainties": ["string"]
 }
-Always assign numeric scores from 0 to 100 for professionalism_score, respectfulness_score, and politeness_score based on the agent's performance.
+
+SCORING CRITERIA AND DYNAMIC SCORING RUBRIC (Each subscore must be an independent decimal float between 0.0 and 100.0 reflecting the specific recording):
+- Professionalism (0.0 to 100.0):
+  * 92.0 - 98.0: Exemplary problem understanding, structured guidance, proactive assistance, accurate information.
+  * 82.0 - 91.0: Good competence, answers customer questions correctly with minor hesitation or standard procedures.
+  * 70.0 - 81.0: Average support, took long to understand issue, repeated explanations needed, vague answers.
+  * 50.0 - 69.0: Poor competence, unable to address customer request, inaccurate info or unhelpful.
+
+- Respectfulness (0.0 to 100.0):
+  * 93.0 - 99.0: Actively listened, zero interruptions, acknowledged customer feelings empathetically, appropriate cultural respect.
+  * 83.0 - 92.0: Attentive and polite throughout, standard respectful customer dialogue.
+  * 70.0 - 82.0: Talked over the customer or sounded impatient, abrupt transitions.
+  * 50.0 - 69.0: Dismissive, argumentative, or disrespectful.
+
+- Politeness (0.0 to 100.0):
+  * 92.0 - 98.0: Warm, personalized greeting, consistent pleasantries ("thank you", "please", "glad to assist"), warm sign-off.
+  * 82.0 - 91.0: Standard courteous greeting, polite tone throughout.
+  * 70.0 - 81.0: Rushed, transactional tone, skipped standard pleasantries.
+  * 50.0 - 69.0: Blunt, cold, or rude phrasing.
+
+RESOLUTION ALIGNMENT:
+- Fully resolved calls should generally receive overall scores in the 86.0 - 96.0 range.
+- Partially resolved or pending follow-up calls should generally receive overall scores in the 74.0 - 85.0 range.
+- Unresolved issues or calls with agent friction should receive overall scores in the 52.0 - 72.0 range.
 Calculate total_score as the arithmetic mean of the three scores rounded to 1 decimal place.
 Extract explicit agent actions and client needs from the conversation.
 Include at most 5 client needs, 6 agent actions, and 6 evidence items.

@@ -347,6 +347,177 @@
       color: var(--slate-500);
     }
 
+    /* LIVE MULTI-FILE STAGE TRACKER */
+    .live-tracker-card {
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      border-radius: var(--border-radius);
+      padding: 1.25rem;
+      margin-top: 1.25rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .live-tracker-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .live-tracker-title {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.95rem;
+      color: var(--slate-800);
+    }
+
+    .live-pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--primary);
+      box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+      animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+      70% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+    }
+
+    .tracker-stage-badge {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 700;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      border: 1px solid #c7d2fe;
+    }
+
+    .stepper-stages {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 850px) {
+      .stepper-stages {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .step-pill {
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: 6px;
+      padding: 0.45rem 0.3rem;
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--slate-500);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      transition: all 0.2s ease;
+    }
+
+    .step-pill.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+      box-shadow: 0 0 10px rgba(79, 70, 229, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .step-pill.completed {
+      background: #ecfdf5;
+      color: #059669;
+      border-color: #a7f3d0;
+    }
+
+    .step-num {
+      width: 16px;
+      height: 16px;
+      line-height: 16px;
+      font-size: 0.65rem;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.08);
+      display: inline-block;
+    }
+
+    .step-pill.active .step-num {
+      background: rgba(255, 255, 255, 0.3);
+      color: white;
+    }
+
+    .tracker-files-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .tracker-file-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.55rem 0.85rem;
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      transition: all 0.15s ease;
+    }
+
+    .tracker-file-row.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .tracker-file-row.completed {
+      border-color: #a7f3d0;
+      background: #f0fdf4;
+    }
+
+    .tracker-file-row.failed {
+      border-color: #fca5a5;
+      background: #fef2f2;
+    }
+
+    .tracker-file-info {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 600;
+      color: var(--slate-800);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tracker-file-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .tracker-badge-queued { background: var(--slate-100); color: var(--slate-600); border: 1px solid var(--slate-300); }
+    .tracker-badge-processing { background: #e0e7ff; color: var(--primary); border: 1px solid #c7d2fe; }
+    .tracker-badge-completed { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+    .tracker-badge-failed { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+
     /* DROPDOWN WHEN FILES > 2 */
     .dropdown-banner {
       background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
@@ -780,15 +951,61 @@
             <div id="progressBarFill" class="progress-bar-fill"></div>
           </div>
           <div id="progressStatus" class="progress-status">Initiating pipeline stages...</div>
+
+          <!-- Live Pipeline Multi-File Stage Tracker -->
+          <div id="liveTrackerCard" class="live-tracker-card" style="display: none;">
+            <div class="live-tracker-header">
+              <div class="live-tracker-title">
+                <span class="live-pulse-dot"></span>
+                <strong>Live Stage Tracker:</strong>
+                <span id="trackerCurrentCallText">Processing file...</span>
+              </div>
+              <div id="trackerStageBadge" class="tracker-stage-badge">Stage 1/8</div>
+            </div>
+
+            <!-- 8 Pipeline Stages Visual Stepper -->
+            <div class="stepper-stages" id="stepperStages">
+              <div class="step-pill" id="step-1"><span class="step-num">1</span> Convert</div>
+              <div class="step-pill" id="step-2"><span class="step-num">2</span> Diarize</div>
+              <div class="step-pill" id="step-3"><span class="step-num">3</span> Indic ASR</div>
+              <div class="step-pill" id="step-4"><span class="step-num">4</span> Punctuate</div>
+              <div class="step-pill" id="step-5"><span class="step-num">5</span> Roles</div>
+              <div class="step-pill" id="step-6"><span class="step-num">6</span> Intent</div>
+              <div class="step-pill" id="step-7"><span class="step-num">7</span> Scoring</div>
+              <div class="step-pill" id="step-8"><span class="step-num">8</span> Deliverable</div>
+            </div>
+
+            <!-- Multi-File Tracking Table / List -->
+            <div class="tracker-files-list" id="trackerFilesList">
+              <!-- Dynamic rows for each file in the batch -->
+            </div>
+          </div>
         </div>
 
         <!-- Action Bar -->
         <div class="action-bar">
           <button id="clearBtn" class="btn btn-secondary" onclick="clearSelectedFiles()" style="display: none;">Clear</button>
-          <button id="loadSampleBtn" class="btn btn-secondary" onclick="loadSampleEvaluation()">Load Sample (Anusha Call)</button>
+          
           <button id="processBtn" class="btn btn-primary" onclick="startProcessing()" disabled>
             <span>🚀 Process Call(s)</span>
           </button>
+        </div>
+
+        <!-- Crash & Error Log Container -->
+        <div id="crashLogBox" class="card" style="display: none; border-left: 5px solid var(--danger); margin-top: 1.5rem; margin-bottom: 0;">
+          <div class="card-header" style="background-color: #fef2f2; border-bottom: 1px solid #fee2e2;">
+            <h2 style="color: var(--danger); font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>⚠️</span> Pipeline Crash &amp; Error Log
+            </h2>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="copyCrashLog()">📋 Copy Error Log</button>
+              <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="hideCrashLog()">✖ Dismiss</button>
+            </div>
+          </div>
+          <div class="card-body" style="background-color: #fffaf0;">
+            <p id="crashSummaryMsg" style="font-weight: 600; color: #b91c1c; margin-bottom: 0.75rem; font-size: 0.95rem;"></p>
+            <pre id="crashLogPre" style="background: #0f172a; color: #f87171; padding: 1.25rem; border-radius: 8px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.82rem; line-height: 1.5; overflow-x: auto; max-height: 400px; white-space: pre-wrap; word-break: break-all; border: 1px solid #334155;"></pre>
+          </div>
         </div>
       </div>
     </div>
@@ -850,12 +1067,12 @@
       <div class="scorecard-hero">
         <div class="total-score-circle" id="heroScoreCircle" style="--score-pct: 90;">
           <div class="total-score-inner">
-            <span class="score-val" id="heroScoreVal">93.3</span>
+            <span class="score-val" id="heroScoreVal">--</span>
             <span class="score-max">OVERALL / 100</span>
           </div>
         </div>
         <div class="hero-meta">
-          <h3 id="heroFileName">Call Evaluation Scorecard</h3>
+          <h3 id="heroFileName">--</h3>
           <p id="heroExplanation" style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.4; margin-top: 0.4rem;">
             Resolution details will appear here.
           </p>
@@ -873,36 +1090,36 @@
         <div class="subscore-card">
           <div class="subscore-header">
             <span class="subscore-title">Professionalism</span>
-            <span class="subscore-number" id="subscoreProf">90</span>
+            <span class="subscore-number" id="subscoreProf">--</span>
           </div>
           <div class="score-bar">
             <div class="score-bar-inner" id="subscoreProfBar" style="width: 90%;"></div>
           </div>
-          <p class="subscore-rationale" id="subscoreProfRationale">Structured communication and technical terminology.</p>
+          <p class="subscore-rationale" id="subscoreProfRationale">Awaiting evaluation...</p>
         </div>
 
         <!-- Respectfulness -->
         <div class="subscore-card">
           <div class="subscore-header">
             <span class="subscore-title">Respectfulness</span>
-            <span class="subscore-number" id="subscoreResp" style="color: var(--success);">100</span>
+            <span class="subscore-number" id="subscoreResp" style="color: var(--success);">--</span>
           </div>
           <div class="score-bar">
             <div class="score-bar-inner" id="subscoreRespBar" style="width: 100%; background: var(--success);"></div>
           </div>
-          <p class="subscore-rationale" id="subscoreRespRationale">Deferential phrasing and consistent respect.</p>
+          <p class="subscore-rationale" id="subscoreRespRationale">Awaiting evaluation...</p>
         </div>
 
         <!-- Politeness -->
         <div class="subscore-card">
           <div class="subscore-header">
             <span class="subscore-title">Politeness</span>
-            <span class="subscore-number" id="subscorePol" style="color: var(--info);">90</span>
+            <span class="subscore-number" id="subscorePol" style="color: var(--info);">--</span>
           </div>
           <div class="score-bar">
             <div class="score-bar-inner" id="subscorePolBar" style="width: 90%; background: var(--info);"></div>
           </div>
-          <p class="subscore-rationale" id="subscorePolRationale">Proactive assistance and courteous tone.</p>
+          <p class="subscore-rationale" id="subscorePolRationale">Awaiting evaluation...</p>
         </div>
       </div>
 
@@ -974,6 +1191,8 @@
     let currentMode = 'single';
     let evaluations = []; // Array of { id, filename, data }
     let selectedCallIndex = 0;
+    let currentJobId = null;
+    let jobPollTimer = null;
 
     // Check backend server on load
     window.addEventListener('DOMContentLoaded', () => {
@@ -1065,9 +1284,10 @@
               const data = JSON.parse(e.target.result);
               evaluations.push({
                 id: 'eval-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-                filename: data.audio_file || file.name,
+                filename: file.name.replace(/\.json$/i, ""),
                 data: data
               });
+              selectedCallIndex = evaluations.length - 1;
               renderEvaluations();
             } catch (err) {
               alert('Invalid JSON file: ' + file.name);
@@ -1110,6 +1330,8 @@
         const inp = document.getElementById('input-' + id);
         if (inp) inp.value = '';
       });
+      const trackerCard = document.getElementById('liveTrackerCard');
+      if (trackerCard) trackerCard.style.display = 'none';
     }
 
     function formatBytes(bytes) {
@@ -1120,9 +1342,47 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
-    // Process Files
+    // Crash & Error Log Handling
+    function showCrashLog(summary, logContent) {
+      const box = document.getElementById('crashLogBox');
+      const sumEl = document.getElementById('crashSummaryMsg');
+      const preEl = document.getElementById('crashLogPre');
+      sumEl.textContent = summary || 'Pipeline encountered an unexpected error.';
+      preEl.textContent = logContent || 'No error details or stack trace available.';
+      box.style.display = 'block';
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideCrashLog() {
+      const box = document.getElementById('crashLogBox');
+      if (box) box.style.display = 'none';
+    }
+
+    function copyCrashLog() {
+      const preEl = document.getElementById('crashLogPre');
+      if (!preEl || !preEl.textContent) return;
+      navigator.clipboard.writeText(preEl.textContent).then(() => {
+        alert('Pipeline error log copied to clipboard!');
+      }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = preEl.textContent;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('Pipeline error log copied to clipboard!');
+      });
+    }
+
+    // Process Files via Background Worker
     async function startProcessing() {
       if (selectedFiles.length === 0) return;
+
+      hideCrashLog();
+      if (jobPollTimer) {
+        clearInterval(jobPollTimer);
+        jobPollTimer = null;
+      }
 
       const progressBox = document.getElementById('progressBox');
       const progressBar = document.getElementById('progressBarFill');
@@ -1132,8 +1392,9 @@
 
       progressBox.style.display = 'block';
       processBtn.disabled = true;
-      progressBar.style.width = '10%';
-      progressPercent.textContent = '10%';
+      progressBar.style.background = 'var(--primary)';
+      progressBar.style.width = '5%';
+      progressPercent.textContent = '5%';
       progressStatus.textContent = 'Uploading ' + selectedFiles.length + ' file(s) to server...';
 
       const formData = new FormData();
@@ -1144,138 +1405,213 @@
       });
 
       try {
-        progressBar.style.width = '35%';
-        progressPercent.textContent = '35%';
-        progressStatus.textContent = 'Executing pipeline (Diarization -> Whisper -> Punctuation -> Qwen Scorecard)...';
-
         const res = await fetch('/api/upload', {
           method: 'POST',
           body: formData
         });
 
         if (!res.ok) {
-          throw new Error('Server returned HTTP ' + res.status);
+          let errText = 'Server returned HTTP ' + res.status;
+          try {
+            const errData = await res.json();
+            if (errData.error) errText = errData.error;
+            if (errData.traceback) {
+              showCrashLog(errText, errData.traceback);
+            }
+          } catch (_) {}
+          throw new Error(errText);
         }
 
         const data = await res.json();
-        progressBar.style.width = '100%';
-        progressPercent.textContent = '100%';
-        progressStatus.textContent = 'Done! Scores generated.';
-
-        if (Array.isArray(data.evaluations)) {
-          data.evaluations.forEach(ev => evaluations.push(ev));
-        } else if (data.data) {
-          evaluations.push(data);
+        if (!data.job_id) {
+          throw new Error(data.error || 'Server did not return a valid Job ID.');
         }
 
-        setTimeout(() => {
-          progressBox.style.display = 'none';
-          clearSelectedFiles();
-          renderEvaluations();
-        }, 600);
+        currentJobId = data.job_id;
+        progressBar.style.width = '10%';
+        progressPercent.textContent = '10%';
+        progressStatus.textContent = 'Uploaded. Pipeline executing in background (no timeout)...';
+
+        // Start non-blocking polling
+        startJobPolling(currentJobId);
 
       } catch (err) {
-        progressStatus.textContent = 'Error: ' + err.message + '. (If backend is offline, load existing JSON scorecards directly via the "View Existing Score" tab).';
+        progressStatus.textContent = 'Failed to submit pipeline: ' + err.message;
         progressBar.style.background = 'var(--danger)';
         processBtn.disabled = false;
+        showCrashLog('Upload / Server Connection Failed', err.stack || err.message);
       }
     }
 
-    // Load Sample Evaluation (Anusha Call)
-    function loadSampleEvaluation() {
-      const sample = {
-        "audio_file": "anusha_call_support_sample.mp3",
-        "intent_review": "supported",
-        "client_needs": [
-          "Have the subject names and employee IDs corrected in NLP",
-          "Receive confirmation that the error Excel sheet has been shared via email",
-          "Get clarification on missing employee data in NLP"
-        ],
-        "agent_actions": [
-          "Ma'am, you have requested for a call back on this member, ma'am. Yes, ma'am. What's the problem?",
-          "Identifies incorrect subject names and missing employee IDs in the system",
-          "Confirms error Excel sheet was uploaded and shared via email",
-          "Provides instructions on how details must be added into NLP",
-          "Offers continuous clarification on the same email loop"
-        ],
-        "resolution": {
-          "status": "unresolved",
-          "explanation": "Agent identified data discrepancies and shared the error spreadsheet. However, data correction was not yet confirmed completed on the call."
-        },
-        "scorecard": {
-          "professionalism_score": 90.0,
-          "respectfulness_score": 100.0,
-          "politeness_score": 90.0,
-          "total_score": 93.3,
-          "professionalism_rationale": "Agent maintains clear, structured communication and uses appropriate technical terms without deviation.",
-          "respectfulness_rationale": "Repeated use of 'ma'am' and deferential phrasing shows consistent respect for the client's position.",
-          "politeness_rationale": "Agent proactively shares information and offers clarification with courteous language and cultural appropriateness.",
-          "evidence": [
-            {
-              "timestamp": "14.36-20.84",
-              "speaker_id": "SPEAKER_00",
-              "quote": "Ma'am, you have requested for a call back on this member, ma'am. Yes, ma'am. Ma'am, what's the problem, ma'am.",
-              "category": "respectfulness",
-              "interpretation": "Repeated use of respectful terms demonstrates attentive client service."
-            },
-            {
-              "timestamp": "27.79-33.63",
-              "speaker_id": "SPEAKER_00",
-              "quote": "the subject names are incorrect and few of them we haven't found and the employee ids and names we did not find in NLP.",
-              "category": "professionalism",
-              "interpretation": "Precise identification of technical data issues."
-            },
-            {
-              "timestamp": "22.90-27.28",
-              "speaker_id": "SPEAKER_00",
-              "quote": "when we have uploaded mom, I have shared you the error excel sheet.",
-              "category": "politeness",
-              "interpretation": "Proactive follow-up regarding the error sheet."
-            }
-          ]
-        },
-        "uncertainties": []
-      };
+    function startJobPolling(jobId) {
+      if (jobPollTimer) clearInterval(jobPollTimer);
 
-      // Add a couple of sample calls to showcase > 2 dropdown behavior
-      evaluations = [
-        { id: "call-001", filename: "anusha_call_support_sample.mp3", data: sample },
-        { 
-          id: "call-002", 
-          filename: "billing_inquiry_call_102.wav", 
-          data: {
-            ...sample,
-            audio_file: "billing_inquiry_call_102.wav",
-            resolution: { status: "resolved", explanation: "Billing inquiry answered and adjusted invoice sent." },
-            scorecard: {
-              ...sample.scorecard,
-              professionalism_score: 95.0,
-              respectfulness_score: 95.0,
-              politeness_score: 98.0,
-              total_score: 96.0
+      const progressBox = document.getElementById('progressBox');
+      const progressBar = document.getElementById('progressBarFill');
+      const progressPercent = document.getElementById('progressPercent');
+      const progressStatus = document.getElementById('progressStatus');
+      const processBtn = document.getElementById('processBtn');
+
+      jobPollTimer = setInterval(async () => {
+        try {
+          const res = await fetch('/api/job/' + jobId + '?t=' + Date.now());
+          if (!res.ok) {
+            throw new Error('Failed to query job state (HTTP ' + res.status + ')');
+          }
+
+          const job = await res.json();
+
+          // Update Live Multi-File Stage Tracker UI
+          updateLiveTrackerUI(job);
+
+          // Merge any completed evaluations progressively
+          if (Array.isArray(job.evaluations) && job.evaluations.length > 0) {
+            let changed = false;
+            job.evaluations.forEach(ev => {
+              const idx = evaluations.findIndex(e => e.filename === ev.filename || e.id === ev.id);
+              if (idx >= 0) {
+                evaluations[idx] = ev;
+              } else {
+                evaluations.push(ev);
+                changed = true;
+              }
+            });
+            if (changed) {
+              selectedCallIndex = evaluations.length - 1;
+              renderEvaluations();
             }
           }
-        },
-        { 
-          id: "call-003", 
-          filename: "technical_escalation_701.mp3", 
-          data: {
-            ...sample,
-            audio_file: "technical_escalation_701.mp3",
-            resolution: { status: "pending_follow_up", explanation: "Issue escalated to L2 engineering team." },
-            scorecard: {
-              ...sample.scorecard,
-              professionalism_score: 85.0,
-              respectfulness_score: 90.0,
-              politeness_score: 80.0,
-              total_score: 85.0
-            }
+
+          const total = Math.max(1, job.total_files || selectedFiles.length || 1);
+          const done = job.completed_files || 0;
+          let pct = Math.min(95, Math.max(10, Math.round((done / total) * 100)));
+
+          if (job.status === 'running' || job.status === 'queued') {
+            progressBar.style.width = pct + '%';
+            progressPercent.textContent = pct + '%';
+            const curr = job.current_file
+              ? `Processing [${done + 1}/${total}]: ${job.current_file} (Diarization -> Indic-Conformer -> Qwen)...`
+              : (job.current_stage || 'Executing pipeline in background...');
+            progressStatus.textContent = curr;
           }
+          else if (job.status === 'completed') {
+            clearInterval(jobPollTimer);
+            jobPollTimer = null;
+            processBtn.disabled = false;
+
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+            progressStatus.textContent = 'Done! All ' + total + ' file(s) processed successfully.';
+
+            renderEvaluations();
+
+            if (job.crash_log) {
+              showCrashLog('Completed with notices/errors on some audio files:', job.crash_log);
+            }
+
+            setTimeout(() => {
+              progressBox.style.display = 'none';
+              clearSelectedFiles();
+            }, 1200);
+          }
+          else if (job.status === 'failed') {
+            clearInterval(jobPollTimer);
+            jobPollTimer = null;
+            processBtn.disabled = false;
+
+            progressBar.style.width = '100%';
+            progressBar.style.background = 'var(--danger)';
+            progressStatus.textContent = 'Pipeline execution crashed or failed.';
+
+            if (evaluations.length > 0) {
+              renderEvaluations();
+            }
+
+            showCrashLog(
+              job.current_stage || 'Pipeline processing crashed',
+              job.crash_log || 'Unknown crash occurred. Check server log output.'
+            );
+          }
+
+        } catch (pollErr) {
+          console.warn('Job polling warning (will retry):', pollErr);
         }
-      ];
-
-      renderEvaluations();
+      }, 2000);
     }
+
+    // Update Live Multi-File Stage Tracker UI
+    function updateLiveTrackerUI(job) {
+      const trackerCard = document.getElementById('liveTrackerCard');
+      if (!trackerCard || !job) return;
+
+      trackerCard.style.display = 'block';
+
+      const currentCallEl = document.getElementById('trackerCurrentCallText');
+      const stageBadgeEl = document.getElementById('trackerStageBadge');
+      const stageNum = job.current_stage_num || 1;
+      const stageName = job.current_stage_name || 'Processing';
+
+      if (currentCallEl) {
+        currentCallEl.textContent = job.current_file ? job.current_file : 'Preparing audio files...';
+      }
+      if (stageBadgeEl) {
+        stageBadgeEl.textContent = job.status === 'completed'
+          ? 'Completed (All 8 Stages Finished)'
+          : `Stage ${stageNum}/8: ${stageName}`;
+      }
+
+      // Update 8-step visual stepper
+      for (let s = 1; s <= 8; s++) {
+        const pill = document.getElementById('step-' + s);
+        if (!pill) continue;
+        pill.classList.remove('active', 'completed');
+        if (job.status === 'completed' || s < stageNum) {
+          pill.classList.add('completed');
+        } else if (s === stageNum) {
+          pill.classList.add('active');
+        }
+      }
+
+      // Update multi-file list
+      const filesContainer = document.getElementById('trackerFilesList');
+      if (filesContainer && Array.isArray(job.files)) {
+        filesContainer.innerHTML = job.files.map(file => {
+          const isCurrent = file.filename === job.current_file && file.status === 'processing';
+          let rowClass = 'tracker-file-row';
+          let badgeHtml = '';
+
+          if (file.status === 'completed') {
+            rowClass += ' completed';
+            const scoreStr = file.score != null ? `Score: ${Number(file.score).toFixed(1)}/100` : 'Score Saved';
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-completed">✅ ${scoreStr}</span>`;
+          } else if (file.status === 'processing' || isCurrent) {
+            rowClass += ' active';
+            const sNum = file.stage_num || stageNum;
+            const sName = file.stage_name || stageName;
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-processing">⚡ Stage ${sNum}/8: ${escapeHtml(sName)}</span>`;
+          } else if (file.status === 'failed') {
+            rowClass += ' failed';
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-failed">❌ ${file.error ? escapeHtml(file.error.substring(0, 30)) : 'Failed'}</span>`;
+          } else {
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-queued">⏳ Queued</span>`;
+          }
+
+          return `
+            <div class="${rowClass}">
+              <div class="tracker-file-info">
+                <span>🎵</span>
+                <span>${escapeHtml(file.filename)}</span>
+              </div>
+              <div class="tracker-file-status">
+                ${badgeHtml}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    
 
     // MAIN RENDER FUNCTION
     function renderEvaluations() {

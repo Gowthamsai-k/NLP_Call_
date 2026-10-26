@@ -52,6 +52,7 @@ def process_single_call(
     eval_gpu_mem: float = EVAL_GPU_MEM,
     asr_lang: Optional[str] = None,
     asr_decoder: Optional[str] = None,
+    stage_callback: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Processes a single audio call end-to-end through all seven pipeline stages."""
     start_time = time.time()
@@ -95,6 +96,8 @@ def process_single_call(
         release_memory()
 
         # STAGE 1: Audio Conversion
+        if stage_callback:
+            stage_callback(1, "FFmpeg Audio Conversion (16kHz PCM)")
         if not (resume and clean_wav_p.exists() and clean_wav_p.stat().st_size > 0):
             logger.info(">>> Stage 1: Converting audio to clean mono WAV...")
             t0 = time.time()
@@ -112,6 +115,8 @@ def process_single_call(
             status_data["stages"]["audio_conversion"] = {"status": "resumed"}
 
         # STAGE 2: Speaker Diarization
+        if stage_callback:
+            stage_callback(2, "Speaker Diarization (PyAnnote)")
         if not (resume and metadata_p.exists() and metadata_p.stat().st_size > 0):
             logger.info(">>> Stage 2: Speaker Diarization...")
             t0 = time.time()
@@ -133,8 +138,10 @@ def process_single_call(
         release_memory(delay=1.0)
 
         # STAGE 3: Audio Transcription
+        if stage_callback:
+            stage_callback(3, "ASR Transcription (AI4Bharat Indic-Conformer)")
         if not (resume and whisper_raw_p.exists() and whisper_raw_p.stat().st_size > 0):
-            logger.info(">>> Stage 3: ASR Transcription (Whisper)...")
+            logger.info(">>> Stage 3: ASR Transcription (AI4Bharat Indic-Conformer)...")
             t0 = time.time()
             retry_with_memory_cleanup(
                 run_transcription,
@@ -153,10 +160,12 @@ def process_single_call(
             logger.info(">>> Stage 3: Raw transcript already exists, resuming.")
             status_data["stages"]["transcription"] = {"status": "resumed"}
 
-        # Force full memory release after Whisper
+        # Force full memory release after Indic-Conformer ASR
         release_memory(delay=1.0)
 
         # STAGE 4: Punctuation Restoration
+        if stage_callback:
+            stage_callback(4, "Punctuation Restoration (Horizon-Labs)")
         if not (resume and punctuated_p.exists() and punctuated_p.stat().st_size > 0):
             logger.info(">>> Stage 4: Punctuation Restoration...")
             t0 = time.time()
@@ -176,6 +185,8 @@ def process_single_call(
         release_memory()
 
         # STAGE 5: Alignment
+        if stage_callback:
+            stage_callback(5, "Speaker Alignment & Role Attribution")
         if not (resume and final_transcript_p.exists() and final_transcript_p.stat().st_size > 0):
             logger.info(">>> Stage 5: Speaker Alignment...")
             t0 = time.time()
@@ -192,6 +203,8 @@ def process_single_call(
         release_memory()
 
         # STAGE 6: Intent Extraction
+        if stage_callback:
+            stage_callback(6, "Qwen Intent Extraction & Client Needs")
         if not (resume and final_intent_p.exists() and final_intent_p.stat().st_size > 0):
             logger.info(">>> Stage 6: Intent Extraction...")
             t0 = time.time()
@@ -214,6 +227,8 @@ def process_single_call(
             status_data["stages"]["intent_extraction"] = {"status": "resumed"}
 
         # STAGE 7: Call Evaluation
+        if stage_callback:
+            stage_callback(7, "Qwen Quality Scoring & Rubric Evaluation")
         if not (resume and final_eval_p.exists() and final_eval_p.stat().st_size > 0):
             logger.info(">>> Stage 7: Call Evaluation...")
             t0 = time.time()
@@ -261,13 +276,15 @@ def process_single_call(
             status_data["stages"]["evaluation"] = {"status": "resumed"}
 
         # STAGE 8: Deliverable Cleanup (keep only final score evaluation)
+        if stage_callback:
+            stage_callback(8, "Score Deliverable Packaging & Cleanup")
         removed_files = []
         # Annotate final_eval_p with audio_file name if missing
         try:
             if final_eval_p.exists():
                 with final_eval_p.open("r", encoding="utf-8") as f:
                     eval_data = json.load(f)
-                if isinstance(eval_data, dict) and "audio_file" not in eval_data:
+                if isinstance(eval_data, dict):
                     eval_data["audio_file"] = input_p.name
                     with final_eval_p.open("w", encoding="utf-8") as f:
                         json.dump(eval_data, f, ensure_ascii=False, indent=2)

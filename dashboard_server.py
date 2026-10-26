@@ -2,16 +2,20 @@
 """
 Dashboard server for Customer Support Quality Pipeline.
 Zero external web dependencies (uses Python standard library http.server).
-Serves the static dashboard and handles audio/folder/zip uploads.
+Serves the static dashboard and handles audio/folder/zip uploads with asynchronous background processing.
 """
 
 import os
 import sys
 import json
+import time
 import shutil
 import logging
 import argparse
 import tempfile
+import threading
+import uuid
+import traceback
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
@@ -28,6 +32,11 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("dashboard_server")
+
+# In-memory Job Management (Thread-safe)
+JOBS = {}
+JOBS_LOCK = threading.Lock()
+
 
 # Discover existing evaluations
 def find_existing_evaluations(output_dir: Path):
@@ -52,10 +61,208 @@ def find_existing_evaluations(output_dir: Path):
     return evaluations
 
 
+def run_pipeline_worker(job_id: str, temp_upload_dir: Path, uploaded_files: list, asr_lang: str, asr_decoder: str):
+    """
+    Background worker that executes the ML pipeline sequentially on all uploaded audio files.
+    Isolates per-file failures and records detailed crash logs without timing out.
+    """
+    logger.info(f"Starting background pipeline worker for Job [{job_id}] with {len(uploaded_files)} file item(s).")
+    try:
+        from src.customer_support_pipeline.orchestration.batch_runner import unpack_archive
+        from src.customer_support_pipeline.audio.preprocessor import find_audio_files
+        from src.customer_support_pipeline.orchestration.pipeline import process_single_call
+
+        target_audio_files = []
+        for up_file in uploaded_files:
+            file_lower = up_file.name.lower()
+            if file_lower.endswith((".zip", ".tar", ".tar.gz", ".tgz")):
+                try:
+                    unpacked_dir = unpack_archive(
+                        str(up_file),
+                        destination_dir=str(temp_upload_dir / "unpacked" / up_file.stem)
+                    )
+                    found = find_audio_files(str(unpacked_dir), recursive=True)
+                    target_audio_files.extend(found)
+                except Exception as arch_err:
+                    tb = traceback.format_exc()
+                    logger.error(f"Failed to unpack archive {up_file.name}: {arch_err}\n{tb}")
+                    with JOBS_LOCK:
+                        JOBS[job_id]["errors"].append({
+                            "file": up_file.name,
+                            "error": f"Failed to unpack archive: {arch_err}",
+                            "traceback": tb,
+                        })
+            elif up_file.suffix.lower() in (
+                ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".opus", ".webm", ".wma"
+            ):
+                target_audio_files.append(up_file)
+
+        with JOBS_LOCK:
+            if not target_audio_files:
+                JOBS[job_id]["status"] = "failed"
+                JOBS[job_id]["current_stage"] = "No valid audio files found."
+                JOBS[job_id]["crash_log"] = "No supported audio files (.mp3, .wav, .m4a, etc.) found in the upload."
+                JOBS[job_id]["updated_at"] = time.time()
+                shutil.rmtree(temp_upload_dir, ignore_errors=True)
+                return
+
+            JOBS[job_id]["total_files"] = len(target_audio_files)
+            JOBS[job_id]["status"] = "running"
+            JOBS[job_id]["files"] = [
+                {
+                    "filename": f.name,
+                    "index": i,
+                    "status": "queued",
+                    "stage_num": 0,
+                    "stage_name": "Queued",
+                    "score": None,
+                    "error": None,
+                }
+                for i, f in enumerate(target_audio_files, start=1)
+            ]
+            JOBS[job_id]["updated_at"] = time.time()
+
+        output_base = PROJECT_ROOT / "output"
+        output_base.mkdir(parents=True, exist_ok=True)
+
+        for idx, audio_path in enumerate(target_audio_files, start=1):
+            def make_stage_cb(target_fname: str, cur_idx: int, tot_files: int):
+                def cb(stage_num: int, stage_name: str):
+                    with JOBS_LOCK:
+                        job = JOBS.get(job_id)
+                        if not job:
+                            return
+                        job["current_file"] = target_fname
+                        job["current_stage_num"] = stage_num
+                        job["current_stage_name"] = stage_name
+                        job["current_stage"] = f"[{cur_idx}/{tot_files}] {target_fname} -> Stage {stage_num}/8: {stage_name}"
+                        for item in job["files"]:
+                            if item["filename"] == target_fname:
+                                item["status"] = "processing"
+                                item["stage_num"] = stage_num
+                                item["stage_name"] = stage_name
+                                break
+                        job["updated_at"] = time.time()
+                return cb
+
+            stage_cb = make_stage_cb(audio_path.name, idx, len(target_audio_files))
+
+            with JOBS_LOCK:
+                JOBS[job_id]["current_file"] = audio_path.name
+                JOBS[job_id]["current_stage_num"] = 1
+                JOBS[job_id]["current_stage_name"] = "Starting Audio Pipeline"
+                JOBS[job_id]["current_stage"] = f"Processing [{idx}/{len(target_audio_files)}]: {audio_path.name}"
+                for item in JOBS[job_id]["files"]:
+                    if item["filename"] == audio_path.name:
+                        item["status"] = "processing"
+                        item["stage_num"] = 1
+                        item["stage_name"] = "Starting Pipeline"
+                        break
+                JOBS[job_id]["updated_at"] = time.time()
+
+            call_stem = audio_path.stem
+            call_out = output_base / call_stem
+            logger.info(f"Job [{job_id}] [{idx}/{len(target_audio_files)}] Processing {audio_path.name} -> {call_out} (ASR Lang: {asr_lang})")
+
+            try:
+                call_res = process_single_call(
+                    input_audio_path=str(audio_path),
+                    output_dir=str(call_out),
+                    clean_intermediate=True,
+                    asr_lang=asr_lang,
+                    asr_decoder=asr_decoder,
+                    stage_callback=stage_cb,
+                )
+
+                eval_path = call_out / "call_evaluation.json"
+                tot_score = None
+                if eval_path.exists():
+                    with eval_path.open("r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    data["audio_file"] = audio_path.name
+                    tot_score = data.get("scorecard", {}).get("total_score")
+                    try:
+                        with eval_path.open("w", encoding="utf-8") as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+
+                    with JOBS_LOCK:
+                        JOBS[job_id]["evaluations"].append({
+                            "id": call_stem,
+                            "filename": audio_path.name,
+                            "data": data,
+                            "path": str(eval_path),
+                        })
+
+                with JOBS_LOCK:
+                    JOBS[job_id]["completed_files"] = idx
+                    for item in JOBS[job_id]["files"]:
+                        if item["filename"] == audio_path.name:
+                            item["status"] = "completed"
+                            item["stage_num"] = 8
+                            item["stage_name"] = "Completed"
+                            item["score"] = tot_score
+                            break
+                    JOBS[job_id]["updated_at"] = time.time()
+
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.error(f"Job [{job_id}] failed processing {audio_path.name}: {e}\n{tb}")
+                with JOBS_LOCK:
+                    JOBS[job_id]["errors"].append({
+                        "file": audio_path.name,
+                        "error": str(e),
+                        "traceback": tb,
+                    })
+                    err_entry = f"Error processing {audio_path.name}: {str(e)}\n\n{tb}"
+                    if not JOBS[job_id]["crash_log"]:
+                        JOBS[job_id]["crash_log"] = err_entry
+                    else:
+                        JOBS[job_id]["crash_log"] += f"\n\n========================================\n{err_entry}"
+                    JOBS[job_id]["completed_files"] = idx
+                    for item in JOBS[job_id]["files"]:
+                        if item["filename"] == audio_path.name:
+                            item["status"] = "failed"
+                            item["stage_name"] = f"Failed: {str(e)[:45]}"
+                            item["error"] = str(e)
+                            break
+                    JOBS[job_id]["updated_at"] = time.time()
+
+        with JOBS_LOCK:
+            if JOBS[job_id]["evaluations"]:
+                JOBS[job_id]["status"] = "completed"
+                JOBS[job_id]["current_stage"] = f"Finished processing {len(JOBS[job_id]['evaluations'])}/{len(target_audio_files)} calls."
+            else:
+                JOBS[job_id]["status"] = "failed"
+                JOBS[job_id]["current_stage"] = "All audio calls failed to process."
+            JOBS[job_id]["updated_at"] = time.time()
+
+    except Exception as fatal_e:
+        tb = traceback.format_exc()
+        logger.error(f"Fatal worker crash for Job [{job_id}]: {fatal_e}\n{tb}")
+        with JOBS_LOCK:
+            JOBS[job_id]["status"] = "failed"
+            JOBS[job_id]["current_stage"] = f"Fatal crash: {fatal_e}"
+            JOBS[job_id]["crash_log"] = f"Fatal Pipeline Crash:\n{str(fatal_e)}\n\n{tb}"
+            JOBS[job_id]["updated_at"] = time.time()
+
+    finally:
+        shutil.rmtree(temp_upload_dir, ignore_errors=True)
+        logger.info(f"Worker finished Job [{job_id}]. Temp files cleaned.")
+
+
 class DashboardHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.dashboard_dir = PROJECT_ROOT / "dashboard"
         super().__init__(*args, directory=str(self.dashboard_dir), **kwargs)
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -75,6 +282,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         elif path == "/api/ping":
             self.send_json_response({"status": "ok", "message": "Dashboard server running"})
+            return
+
+        elif path.startswith("/api/job/"):
+            job_id = path[len("/api/job/"):]
+            with JOBS_LOCK:
+                job_data = JOBS.get(job_id)
+            if job_data:
+                self.send_json_response(job_data)
+            else:
+                self.send_json_response({"error": f"Job {job_id} not found"}, status=404)
             return
 
         elif path == "/api/results":
@@ -101,10 +318,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_json_response({"error": "Expected multipart/form-data"}, status=400)
             return
 
-        # Simple multipart parser for standard library
         try:
             content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
+            if content_length <= 0:
+                self.send_json_response({"error": "Empty upload body"}, status=400)
+                return
+
+            # Read full body in chunks to prevent socket truncation on large multi-audio uploads
+            remaining = content_length
+            body = bytearray()
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                body.extend(chunk)
+                remaining -= len(chunk)
 
             boundary = content_type.split("boundary=")[-1].strip()
             if boundary.startswith('"') and boundary.endswith('"'):
@@ -113,11 +341,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
             parts = body.split(boundary_bytes)
             uploaded_files = []
-            mode = "single"
+            mode = "folder"
             asr_lang = os.environ.get("ASR_LANG", "en")
             asr_decoder = os.environ.get("ASR_DECODER", "ctc")
 
-            temp_upload_dir = Path(tempfile.mkdtemp(prefix="call_upload_"))
+            job_id = f"job_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+            temp_upload_dir = Path(tempfile.mkdtemp(prefix=f"call_upload_{job_id}_"))
 
             for part in parts:
                 if not part or part in (b"--\r\n", b"--", b"\r\n"):
@@ -127,7 +356,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     continue
 
                 headers_raw = part[:header_end].decode("latin-1", errors="ignore")
-                file_data = part[header_end + 4 :].rstrip(b"\r\n")
+                file_data = part[header_end + 4 :]
+                # Strip only the trailing CRLF delimiter preceding boundary, preserving binary audio bytes
+                if file_data.endswith(b"\r\n"):
+                    file_data = file_data[:-2]
+                elif file_data.endswith(b"\n"):
+                    file_data = file_data[:-1]
 
                 if 'name="mode"' in headers_raw:
                     mode = file_data.decode("utf-8", errors="ignore").strip()
@@ -136,7 +370,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 elif 'name="asr_decoder"' in headers_raw:
                     asr_decoder = file_data.decode("utf-8", errors="ignore").strip() or "ctc"
                 elif 'name="files"' in headers_raw or 'filename="' in headers_raw:
-                    # Extract filename
                     import re
                     match = re.search(r'filename="([^"]+)"', headers_raw)
                     if match:
@@ -146,75 +379,63 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         uploaded_files.append(dest_file)
 
             if not uploaded_files:
-                self.send_json_response({"error": "No files uploaded"}, status=400)
+                self.send_json_response({"error": "No valid files received in upload request."}, status=400)
                 shutil.rmtree(temp_upload_dir, ignore_errors=True)
                 return
 
-            logger.info(f"Received {len(uploaded_files)} file(s), mode: {mode}")
+            logger.info(f"Received {len(uploaded_files)} uploaded file(s) for Job [{job_id}]. Spawning background worker.")
 
-            # Import pipeline functions
-            from src.customer_support_pipeline.orchestration.pipeline import process_single_call
-            from src.customer_support_pipeline.orchestration.batch_runner import (
-                process_audio_folder,
-                unpack_archive,
+            # Register Job in memory
+            with JOBS_LOCK:
+                JOBS[job_id] = {
+                    "job_id": job_id,
+                    "status": "queued",
+                    "mode": mode,
+                    "created_at": time.time(),
+                    "updated_at": time.time(),
+                    "total_files": len(uploaded_files),
+                    "completed_files": 0,
+                    "current_file": "",
+                    "current_stage_num": 0,
+                    "current_stage_name": "Queued",
+                    "current_stage": "Queued for processing...",
+                    "files": [
+                        {
+                            "filename": f.name,
+                            "index": idx,
+                            "status": "queued",
+                            "stage_num": 0,
+                            "stage_name": "Queued",
+                            "score": None,
+                            "error": None,
+                        }
+                        for idx, f in enumerate(uploaded_files, start=1)
+                    ],
+                    "evaluations": [],
+                    "errors": [],
+                    "crash_log": None,
+                }
+
+            # Spawn background worker thread
+            worker_thread = threading.Thread(
+                target=run_pipeline_worker,
+                args=(job_id, temp_upload_dir, uploaded_files, asr_lang, asr_decoder),
+                daemon=True,
             )
+            worker_thread.start()
 
-            output_base = PROJECT_ROOT / "output"
-            output_base.mkdir(parents=True, exist_ok=True)
-            results = []
-
-            for up_file in uploaded_files:
-                file_lower = up_file.name.lower()
-                if file_lower.endswith((".zip", ".tar", ".tar.gz", ".tgz")):
-                    logger.info(f"Unpacking archive {up_file.name}...")
-                    unpacked_dir = unpack_archive(str(up_file), destination_dir=str(temp_upload_dir / "unpacked"))
-                    batch_res = process_audio_folder(
-                        input_folder=str(unpacked_dir),
-                        output_base_dir=str(output_base),
-                        clean_intermediate=True,
-                        asr_lang=asr_lang,
-                        asr_decoder=asr_decoder,
-                    )
-                    # Gather resulting evaluations
-                    evals = find_existing_evaluations(output_base)
-                    results.extend(evals)
-
-                elif up_file.suffix.lower() in (".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"):
-                    call_stem = up_file.stem
-                    call_out = output_base / call_stem
-                    logger.info(f"Processing audio {up_file.name} -> {call_out} (ASR Lang: {asr_lang})")
-
-                    call_res = process_single_call(
-                        input_audio_path=str(up_file),
-                        output_dir=str(call_out),
-                        clean_intermediate=True,
-                        asr_lang=asr_lang,
-                        asr_decoder=asr_decoder,
-                    )
-
-                    eval_path = call_out / "call_evaluation.json"
-                    if eval_path.exists():
-                        with eval_path.open("r", encoding="utf-8") as f:
-                            data = json.load(f)
-                        results.append({
-                            "id": call_stem,
-                            "filename": up_file.name,
-                            "data": data,
-                            "path": str(eval_path),
-                        })
-
-            # Cleanup uploaded temp files
-            shutil.rmtree(temp_upload_dir, ignore_errors=True)
-
+            # Respond immediately to avoid browser/HTTP timeouts
             self.send_json_response({
-                "status": "success",
-                "total_processed": len(results),
-                "evaluations": results,
+                "status": "started",
+                "job_id": job_id,
+                "total_files": len(uploaded_files),
+                "message": "Upload accepted. Pipeline executing asynchronously in background.",
             })
 
         except Exception as e:
-            logger.error(f"Upload processing failed: {e}", exc_info=True)
-            self.send_json_response({"error": str(e)}, status=500)
+            tb = traceback.format_exc()
+            logger.error(f"Upload initialization failed: {e}\n{tb}", exc_info=True)
+            self.send_json_response({"error": str(e), "traceback": tb}, status=500)
 
     def send_json_response(self, data: dict, status: int = 200):
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
@@ -222,6 +443,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(body)
 
