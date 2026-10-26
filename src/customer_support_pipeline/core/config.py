@@ -31,7 +31,7 @@ WHISPER_GPU_MEM = float(os.environ.get("WHISPER_GPU_MEM", "0.35"))
 # ==============================================================================
 INTENT_MAX_MODEL_LEN = 8192
 MAX_TRANSCRIPT_TOKENS = 2200
-MAX_BATCH_OUTPUT_TOKENS = 700
+MAX_BATCH_OUTPUT_TOKENS = 1200
 MAX_MERGE_OUTPUT_TOKENS = 1200
 OVERLAP_SEGMENTS = 2
 # Safer default for Colab T4 GPU
@@ -45,8 +45,11 @@ Your task is to extract customer intent from a timestamped conversation.
 The conversation may contain English, Indian English, Indic languages,
 and code-switching between languages.
 
-Reason from the transcript only. Never invent customer details,
-actions, promises, events, or outcomes.
+Reason from the transcript only. All output JSON fields (intents, evidence,
+summaries, rationales) MUST be written in concise ENGLISH only.
+When speech is in Tamil, Hindi, or any Indic language, translate or summarize
+the meaning in English. Do not output raw Indic text or repeat phrases.
+Never invent customer details, actions, promises, events, or outcomes.
 
 Return valid JSON only. Do not return Markdown or explanations outside JSON.
 """.strip()

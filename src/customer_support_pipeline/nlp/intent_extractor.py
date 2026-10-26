@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_json_object(text: str) -> Optional[Dict[str, Any]]:
-    """Robust JSON extraction and validation."""
+    """Robust JSON extraction, validation, and auto-recovery for truncated output."""
     text = text.strip()
     text = re.sub(r"^\s*```(?:json)?\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s*```\s*$", "", text)
@@ -68,9 +68,49 @@ def parse_json_object(text: str) -> Optional[Dict[str, Any]]:
                 if depth == 0:
                     try:
                         obj = json.loads(text[start : i + 1])
-                        return obj if isinstance(obj, dict) else None
+                        if isinstance(obj, dict):
+                            return obj
                     except json.JSONDecodeError:
-                        return None
+                        pass
+
+    # Fallback auto-recovery: repair truncated JSON or unclosed string loops
+    try:
+        cleaned = text[start:]
+        # Deduplicate consecutive repeating word/token loops (3+ times)
+        cleaned = re.sub(r'(\S+)(\s+\1){3,}', r'\1', cleaned)
+
+        stack = []
+        in_str = False
+        esc = False
+        for c in cleaned:
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            else:
+                if c == '"':
+                    in_str = True
+                elif c in "{[":
+                    stack.append("}" if c == "{" else "]")
+                elif c in "}]":
+                    if stack and stack[-1] == c:
+                        stack.pop()
+
+        repaired = cleaned
+        if in_str:
+            repaired += '"'
+        while stack:
+            repaired += stack.pop()
+
+        obj = json.loads(repaired)
+        if isinstance(obj, dict):
+            return obj
+    except Exception:
+        pass
+
     return None
 
 
@@ -332,22 +372,21 @@ TASKS
    Do not assume that a speaker ID identifies a role.
    If evidence is insufficient, use null.
    The agent and client must not have the same speaker ID.
+   Keep role evidence to a short English phrase under 10 words (e.g., "greets caller and offers help").
 
 2. Identify the client's primary intent:
    What is the client trying to accomplish, resolve, obtain,
    change, or understand?
-   State a specific goal, not just a topic such as "payment"
-   or "order".
+   State a specific goal in English.
 
-3. Identify secondary intents and explicit client needs or requests.
+3. Identify secondary intents and explicit client needs or requests in English.
 
 4. Record important events, including relevant actions, explanations,
    commitments, outcomes, and unresolved requests.
-   Distinguish what was requested from what actually happened.
 
-5. Preserve short, exact transcript excerpts as evidence (maximum 20 words).
-   Do not repeat words or loops. Include timestamps and speaker IDs whenever possible.
-   Do not fabricate quotations or translate uncertain speech by guessing.
+5. All output values (intents, evidence, events) MUST be in concise ENGLISH only.
+   If the conversation is in Tamil, Hindi, or an Indic language, summarize in English.
+   Do NOT paste raw non-English words into the JSON. Do not repeat words.
 
 6. Use the previous context only as context. The current transcript
    is the source for quotations and timestamps.
