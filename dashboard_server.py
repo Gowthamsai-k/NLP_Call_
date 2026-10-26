@@ -44,8 +44,10 @@ def find_existing_evaluations(output_dir: Path):
     if not output_dir.exists():
         return evaluations
 
-    # Look for call_evaluation.json files recursively
+    # Look for call_evaluation.json files recursively (skipping failed records)
     for eval_path in output_dir.rglob("call_evaluation.json"):
+        if "failed" in eval_path.parts:
+            continue
         try:
             with eval_path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -185,17 +187,20 @@ def run_pipeline_worker(job_id: str, temp_upload_dir: Path, uploaded_files: list
                 for f_item in failed_list:
                     f_name = f_item.get("audio_file")
                     f_err = f_item.get("error")
+                    f_dir = f_item.get("failed_dir")
                     JOBS[job_id]["errors"].append(f_item)
                     for item in JOBS[job_id]["files"]:
                         if item["filename"] == f_name:
                             item["status"] = "failed"
-                            item["stage_name"] = f"Failed: {str(f_err)[:45]}"
+                            item["stage_name"] = "Failed (moved to failed/)"
                             item["error"] = str(f_err)
+                            item["failed_dir"] = f_dir
                             break
+                    err_msg = f"Error in {f_name}: {f_err} (archived to failed/)"
                     if not JOBS[job_id]["crash_log"]:
-                        JOBS[job_id]["crash_log"] = f"Error in {f_name}: {f_err}"
+                        JOBS[job_id]["crash_log"] = err_msg
                     else:
-                        JOBS[job_id]["crash_log"] += f"\n\nError in {f_name}: {f_err}"
+                        JOBS[job_id]["crash_log"] += f"\n\n{err_msg}"
 
             for ev_item in batch_result.get("evaluations", []):
                 if not any(e["filename"] == ev_item["filename"] for e in JOBS[job_id]["evaluations"]):

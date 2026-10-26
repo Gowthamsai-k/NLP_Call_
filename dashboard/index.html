@@ -1856,7 +1856,8 @@
             badgeHtml = `<span class="tracker-file-badge tracker-badge-processing">⚡ Stage ${sNum}/8: ${escapeHtml(sName)}</span>`;
           } else if (file.status === 'failed') {
             rowClass += ' failed';
-            badgeHtml = `<span class="tracker-file-badge tracker-badge-failed">❌ ${file.error ? escapeHtml(file.error.substring(0, 30)) : 'Failed'}</span>`;
+            const failTitle = file.failed_dir ? `Archived to: ${file.failed_dir} | Error: ${file.error || ''}` : (file.error || 'Failed');
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-failed" title="${escapeHtml(failTitle)}">❌ Failed (placed in failed/)</span>`;
           } else {
             badgeHtml = `<span class="tracker-file-badge tracker-badge-queued">⏳ Queued</span>`;
           }

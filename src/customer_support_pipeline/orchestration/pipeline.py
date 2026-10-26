@@ -320,11 +320,60 @@ def process_single_call(
         status_data["status"] = "failed"
         status_data["error"] = f"{type(exc).__name__}: {str(exc)}"
         status_data["elapsed_seconds"] = round(time.time() - start_time, 2)
+
+        # Place failed record in failed/ directory
         try:
-            with status_p.open("w", encoding="utf-8") as f:
-                json.dump(status_data, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+            import shutil
+            if out_dir.name == "output":
+                failed_dest_dir = out_dir / "failed" / input_p.stem
+            else:
+                failed_dest_dir = out_dir.parent / "failed" / out_dir.name
+            failed_dest_dir.mkdir(parents=True, exist_ok=True)
+
+            failure_info = {
+                "audio_file": input_p.name,
+                "input_path": str(input_p),
+                "status": "failed",
+                "error": status_data["error"],
+                "elapsed_seconds": status_data["elapsed_seconds"],
+                "failed_directory": str(failed_dest_dir),
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            with (failed_dest_dir / "failure_reason.json").open("w", encoding="utf-8") as f:
+                json.dump(failure_info, f, ensure_ascii=False, indent=2)
+
+            with (failed_dest_dir / "error.txt").open("w", encoding="utf-8") as f:
+                f.write(
+                    f"Audio File: {input_p.name}\n"
+                    f"Error: {status_data['error']}\n"
+                    f"Time: {failure_info['timestamp']}\n"
+                )
+
+            # Move any intermediate files created in out_dir to failed_dest_dir
+            if out_dir.resolve() != failed_dest_dir.resolve() and out_dir.exists():
+                for item in list(out_dir.iterdir()):
+                    target_dest = failed_dest_dir / item.name
+                    if target_dest.resolve() in (
+                        (failed_dest_dir / "failure_reason.json").resolve(),
+                        (failed_dest_dir / "error.txt").resolve(),
+                    ):
+                        continue
+                    if target_dest.exists():
+                        if target_dest.is_dir():
+                            shutil.rmtree(target_dest, ignore_errors=True)
+                        else:
+                            target_dest.unlink(missing_ok=True)
+                    shutil.move(str(item), str(target_dest))
+                shutil.rmtree(out_dir, ignore_errors=True)
+
+            status_data["failed_dir"] = str(failed_dest_dir)
+        except Exception as move_err:
+            logger.warning(f"Could not relocate failed record to failed directory: {move_err}")
+            try:
+                with status_p.open("w", encoding="utf-8") as f:
+                    json.dump(status_data, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
         raise exc
 
     finally:

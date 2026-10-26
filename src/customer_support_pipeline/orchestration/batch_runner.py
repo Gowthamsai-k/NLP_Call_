@@ -113,6 +113,8 @@ def process_batch_by_stages(
 
     # Build per-file contexts
     file_contexts: List[Dict[str, Any]] = []
+    failed_base_dir = out_base / "failed"
+
     for audio_item in audio_files:
         audio_p = Path(audio_item).resolve()
         call_out = out_base / audio_p.stem
@@ -131,7 +133,60 @@ def process_batch_by_stages(
             "failed": False,
             "skipped": False,
             "error": None,
+            "failed_stage": None,
+            "failed_dir": None,
         })
+
+    def relocate_to_failed_dir(ctx_item: Dict[str, Any]) -> Path:
+        """Moves any artifacts for a failed call into output/failed/<call_stem> and writes error records."""
+        import shutil
+        stem = ctx_item["input_p"].stem
+        dest_dir = failed_base_dir / stem
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        failure_info = {
+            "audio_file": ctx_item["input_p"].name,
+            "input_path": str(ctx_item["input_p"]),
+            "status": "failed",
+            "failed_stage": ctx_item.get("failed_stage"),
+            "error": ctx_item.get("error"),
+            "failed_directory": str(dest_dir),
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        with (dest_dir / "failure_reason.json").open("w", encoding="utf-8") as f:
+            json.dump(failure_info, f, ensure_ascii=False, indent=2)
+
+        with (dest_dir / "error.txt").open("w", encoding="utf-8") as f:
+            f.write(
+                f"Audio File: {ctx_item['input_p'].name}\n"
+                f"Failed Stage: {ctx_item.get('failed_stage')}\n"
+                f"Error: {ctx_item.get('error')}\n"
+                f"Time: {failure_info['timestamp']}\n"
+            )
+
+        # Move any partial artifacts from ctx_item["out_dir"] into dest_dir
+        if ctx_item["out_dir"].resolve() != dest_dir.resolve() and ctx_item["out_dir"].exists():
+            for item in list(ctx_item["out_dir"].iterdir()):
+                target_dest = dest_dir / item.name
+                if target_dest.resolve() in (
+                    (dest_dir / "failure_reason.json").resolve(),
+                    (dest_dir / "error.txt").resolve(),
+                ):
+                    continue
+                try:
+                    if target_dest.exists():
+                        if target_dest.is_dir():
+                            shutil.rmtree(target_dest, ignore_errors=True)
+                        else:
+                            target_dest.unlink(missing_ok=True)
+                    shutil.move(str(item), str(target_dest))
+                except Exception as move_e:
+                    logger.warning(f"Could not move {item.name} to failed directory: {move_e}")
+            try:
+                shutil.rmtree(ctx_item["out_dir"], ignore_errors=True)
+            except Exception:
+                pass
+        return dest_dir
 
     # Pre-execution VRAM cleanup
     release_memory()
@@ -162,6 +217,7 @@ def process_batch_by_stages(
             logger.error(f"Stage 1 failed for {fname}: {exc}", exc_info=True)
             ctx["failed"] = True
             ctx["error"] = f"Stage 1: {exc}"
+            ctx["failed_stage"] = 1
 
     # =========================================================================
     # STAGE 2: Speaker Diarization (PyAnnote) - Loaded ONCE for entire batch
@@ -192,6 +248,7 @@ def process_batch_by_stages(
                     logger.error(f"Stage 2 failed for {fname}: {exc}", exc_info=True)
                     ctx["failed"] = True
                     ctx["error"] = f"Stage 2: {exc}"
+                    ctx["failed_stage"] = 2
         finally:
             logger.info("--- [Stage 2/8] Unloading PyAnnote Diarization Model ONCE from GPU ---")
             release_memory(diarization_pipeline, delay=1.0)
@@ -235,6 +292,7 @@ def process_batch_by_stages(
                     logger.error(f"Stage 3 failed for {fname}: {exc}", exc_info=True)
                     ctx["failed"] = True
                     ctx["error"] = f"Stage 3: {exc}"
+                    ctx["failed_stage"] = 3
         finally:
             logger.info("--- [Stage 3/8] Unloading Indic-Conformer ASR Model ONCE from GPU ---")
             release_memory(asr_bundle, delay=1.0)
@@ -271,6 +329,7 @@ def process_batch_by_stages(
                     logger.error(f"Stage 4 failed for {fname}: {exc}", exc_info=True)
                     ctx["failed"] = True
                     ctx["error"] = f"Stage 4: {exc}"
+                    ctx["failed_stage"] = 4
         finally:
             logger.info("--- [Stage 4/8] Unloading Horizon Punctuation Model ONCE ---")
             release_memory(punct_model, delay=1.0)
@@ -303,6 +362,7 @@ def process_batch_by_stages(
             logger.error(f"Stage 5 failed for {fname}: {exc}", exc_info=True)
             ctx["failed"] = True
             ctx["error"] = f"Stage 5: {exc}"
+            ctx["failed_stage"] = 5
 
     # =========================================================================
     # STAGES 6 & 7: Qwen LLM (Intent Extraction & Quality Evaluation) - Loaded ONCE
@@ -342,6 +402,7 @@ def process_batch_by_stages(
                         logger.error(f"Stage 6 failed for {fname}: {exc}", exc_info=True)
                         ctx["failed"] = True
                         ctx["error"] = f"Stage 6: {exc}"
+                        ctx["failed_stage"] = 6
                         continue
 
                 # Stage 7: Call Quality Evaluation
@@ -364,6 +425,7 @@ def process_batch_by_stages(
                         logger.error(f"Stage 7 failed for {fname}: {exc}", exc_info=True)
                         ctx["failed"] = True
                         ctx["error"] = f"Stage 7: {exc}"
+                        ctx["failed_stage"] = 7
                         continue
         finally:
             logger.info("--- [Stages 6 & 7] Unloading Qwen 2.5 3B LLM ONCE from GPU ---")
@@ -382,7 +444,14 @@ def process_batch_by_stages(
     for ctx in file_contexts:
         fname = ctx["input_p"].name
         if ctx["failed"]:
-            failed_files.append({"audio_file": fname, "error": ctx["error"]})
+            dest_dir = relocate_to_failed_dir(ctx)
+            ctx["failed_dir"] = str(dest_dir)
+            failed_files.append({
+                "audio_file": fname,
+                "error": ctx["error"],
+                "failed_stage": ctx.get("failed_stage"),
+                "failed_dir": str(dest_dir),
+            })
             continue
 
         try:
@@ -425,7 +494,17 @@ def process_batch_by_stages(
 
         except Exception as exc:
             logger.error(f"Stage 8 finalization failed for {fname}: {exc}", exc_info=True)
-            failed_files.append({"audio_file": fname, "error": f"Stage 8: {exc}"})
+            ctx["failed"] = True
+            ctx["error"] = f"Stage 8: {exc}"
+            ctx["failed_stage"] = 8
+            dest_dir = relocate_to_failed_dir(ctx)
+            ctx["failed_dir"] = str(dest_dir)
+            failed_files.append({
+                "audio_file": fname,
+                "error": ctx["error"],
+                "failed_stage": 8,
+                "failed_dir": str(dest_dir),
+            })
 
     batch_summary = {
         "output_directory": str(out_base),
