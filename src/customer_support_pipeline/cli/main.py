@@ -17,6 +17,9 @@ from ..core.config import (
     WHISPER_GPU_MEM,
     INTENT_GPU_MEM,
     EVAL_GPU_MEM,
+    ASR_LANG,
+    ASR_DECODER,
+    ASR_MODEL_ID,
 )
 from ..orchestration.pipeline import process_single_call
 from ..orchestration.batch_runner import process_audio_folder, unpack_archive
@@ -38,8 +41,31 @@ def main():
     )
     parser.add_argument(
         "--input", "-i",
-        required=True,
+        required=False,
+        default=None,
         help="Path to an audio file, folder of audio files, or .zip/.tar archive.",
+    )
+    parser.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="Start the interactive static dashboard web server.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for the dashboard server (default: 8000).",
+    )
+    parser.add_argument(
+        "--asr-lang",
+        default=ASR_LANG,
+        help=f"Language code for Indic-Conformer ASR (default: {ASR_LANG}). E.g. 'ta', 'hi', 'en', 'te', 'kn'.",
+    )
+    parser.add_argument(
+        "--asr-decoder",
+        default=ASR_DECODER,
+        choices=["ctc", "rnnt"],
+        help=f"Decoding strategy for Indic-Conformer ASR (default: {ASR_DECODER}).",
     )
     parser.add_argument(
         "--output", "-o",
@@ -100,6 +126,19 @@ def main():
     setup_logging(args.log_level)
     logger = logging.getLogger("main")
 
+    if args.dashboard:
+        try:
+            import dashboard_server
+            dashboard_server.run_server(port=args.port)
+        except ImportError:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+            import dashboard_server
+            dashboard_server.run_server(port=args.port)
+        return
+
+    if not args.input:
+        parser.error("--input / -i is required unless --dashboard is specified.")
+
     input_path = Path(args.input).resolve()
     if not input_path.exists():
         logger.error(f"Input path does not exist: {input_path}")
@@ -122,6 +161,8 @@ def main():
             resume=resume,
             clean_intermediate=clean_intermediate,
             reuse_llm=reuse_llm,
+            asr_lang=args.asr_lang,
+            asr_decoder=args.asr_decoder,
         )
     elif input_path.is_dir():
         logger.info(f"Processing folder of audio files: {input_path}...")
@@ -134,6 +175,8 @@ def main():
             resume=resume,
             clean_intermediate=clean_intermediate,
             reuse_llm=reuse_llm,
+            asr_lang=args.asr_lang,
+            asr_decoder=args.asr_decoder,
         )
     elif input_path.is_file():
         logger.info(f"Processing single audio file: {input_path}...")
@@ -149,6 +192,8 @@ def main():
             whisper_gpu_mem=args.whisper_gpu_mem,
             intent_gpu_mem=args.llm_gpu_mem,
             eval_gpu_mem=args.llm_gpu_mem,
+            asr_lang=args.asr_lang,
+            asr_decoder=args.asr_decoder,
         )
 
 

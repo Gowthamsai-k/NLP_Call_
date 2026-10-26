@@ -1,20 +1,19 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=68.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "customer-support-pipeline"
+name = "customer_support_pipeline"
 version = "1.0.0"
-description = "Production Customer Support Speech Intelligence & Evaluation Pipeline"
+description = "Deterministic customer-support call analysis pipeline with diarization, ASR, punctuation, intent extraction, and call evaluation."
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
-license = {text = "MIT"}
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
 authors = [
-    {name = "Customer Support Analytics Team"}
+    { name = "ML Engineering Team" }
 ]
-keywords = ["vllm", "whisper", "pyannote", "diarization", "asr", "qwen", "evaluation"]
+keywords = ["vllm", "indic-conformer", "pyannote", "diarization", "asr", "qwen", "evaluation"]
 classifiers = [
-    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -28,6 +27,8 @@ dependencies = [
     "huggingface-hub>=0.25.0",
     "safetensors>=0.4.5",
     "tokenizers>=0.20.0",
+    "onnxruntime>=1.18.0",
+    "onnx>=1.16.0",
     "soundfile>=0.12.1",
     "librosa>=0.10.2",
     "numpy>=1.26.0",
@@ -49,3 +50,4 @@ csp-run = "customer_support_pipeline.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["customer_support_pipeline*"]

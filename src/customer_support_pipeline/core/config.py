@@ -9,7 +9,8 @@ from pathlib import Path
 # MODEL IDENTIFIERS
 # ==============================================================================
 DIARIZATION_MODEL_ID = "pyannote/speaker-diarization-community-1"
-WHISPER_MODEL_ID = "RedHatAI/whisper-large-v3-quantized.w8a8"
+ASR_MODEL_ID = os.environ.get("ASR_MODEL_ID", "ai4bharat/indic-conformer-600m-multilingual")
+WHISPER_MODEL_ID = ASR_MODEL_ID  # Backward-compatible alias
 PUNCTUATION_MODEL_ID = "Horizon-Labs/punctuation-restoration-small"
 LLM_MODEL_ID = os.environ.get("LLM_MODEL_ID", "Qwen/Qwen2.5-3B-Instruct")
 
@@ -19,6 +20,10 @@ LLM_MODEL_ID = os.environ.get("LLM_MODEL_ID", "Qwen/Qwen2.5-3B-Instruct")
 TARGET_SR = 16000
 MIN_TURN_DURATION_S = 0.1
 SILENCE_THRESHOLD = 1e-5
+
+# Indic-Conformer ASR Configuration (IN-22 Languages)
+ASR_LANG = os.environ.get("ASR_LANG", "ta")  # Default to 'ta' (Tamil), supports 'hi', 'en', 'te', 'kn', etc.
+ASR_DECODER = os.environ.get("ASR_DECODER", "ctc")  # 'ctc' or 'rnnt' 
 
 WHISPER_MAX_MODEL_LEN = 448
 WHISPER_MAX_BATCHED_TOKENS = 2048

@@ -23,6 +23,8 @@ from ..core.config import (
     WHISPER_GPU_MEM,
     INTENT_GPU_MEM,
     EVAL_GPU_MEM,
+    ASR_LANG,
+    ASR_DECODER,
 )
 from ..core.memory import release_memory, retry_with_memory_cleanup, log_vram
 from ..audio.preprocessor import convert_to_clean_wav
@@ -48,6 +50,8 @@ def process_single_call(
     whisper_gpu_mem: float = WHISPER_GPU_MEM,
     intent_gpu_mem: float = INTENT_GPU_MEM,
     eval_gpu_mem: float = EVAL_GPU_MEM,
+    asr_lang: Optional[str] = None,
+    asr_decoder: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Processes a single audio call end-to-end through all seven pipeline stages."""
     start_time = time.time()
@@ -64,15 +68,13 @@ def process_single_call(
     final_eval_p = out_dir / FINAL_EVALUATION_FILENAME
     status_p = out_dir / PIPELINE_STATUS_FILENAME
 
-    if resume and final_eval_p.exists() and final_intent_p.exists() and final_transcript_p.exists():
-        logger.info(f"All final deliverables already exist in {out_dir}. Skipping.")
+    if resume and final_eval_p.exists() and final_eval_p.stat().st_size > 0:
+        logger.info(f"Final evaluation score deliverable already exists in {out_dir}. Skipping.")
         return {
             "status": "success",
             "skipped": True,
             "audio_file": input_p.name,
             "output_dir": str(out_dir),
-            "transcript_path": str(final_transcript_p),
-            "intent_path": str(final_intent_p),
             "evaluation_path": str(final_eval_p),
             "elapsed_seconds": 0.0,
         }
@@ -140,9 +142,11 @@ def process_single_call(
                 str(metadata_p),
                 str(whisper_raw_p),
                 gpu_memory_utilization=whisper_gpu_mem,
+                language=asr_lang,
+                decoder=asr_decoder,
                 max_retries=max_retries,
                 backoff_factor=backoff_factor,
-                stage_name="Stage 3 (ASR Transcription)",
+                stage_name="Stage 3 (Indic-Conformer ASR Transcription)",
             )
             status_data["stages"]["transcription"] = {"status": "success", "duration_s": round(time.time() - t0, 2)}
         else:
@@ -256,28 +260,39 @@ def process_single_call(
             logger.info(">>> Stage 7: Call evaluation already exists, resuming.")
             status_data["stages"]["evaluation"] = {"status": "resumed"}
 
-        # STAGE 8: Intermediate Cleanup
+        # STAGE 8: Deliverable Cleanup (keep only final score evaluation)
         removed_files = []
+        # Annotate final_eval_p with audio_file name if missing
+        try:
+            if final_eval_p.exists():
+                with final_eval_p.open("r", encoding="utf-8") as f:
+                    eval_data = json.load(f)
+                if isinstance(eval_data, dict) and "audio_file" not in eval_data:
+                    eval_data["audio_file"] = input_p.name
+                    with final_eval_p.open("w", encoding="utf-8") as f:
+                        json.dump(eval_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not annotate audio_file to evaluation deliverable: {e}")
+
         if clean_intermediate:
-            for intermediate_path in (clean_wav_p, metadata_p, whisper_raw_p, punctuated_p):
-                if intermediate_path.exists():
+            import shutil
+            for item in list(out_dir.iterdir()):
+                if item.resolve() != final_eval_p.resolve():
                     try:
-                        intermediate_path.unlink()
-                        removed_files.append(intermediate_path.name)
+                        if item.is_dir():
+                            shutil.rmtree(item, ignore_errors=True)
+                        else:
+                            item.unlink(missing_ok=True)
+                        removed_files.append(item.name)
                     except Exception as e:
-                        logger.warning(f"Could not remove {intermediate_path.name}: {e}")
+                        logger.warning(f"Could not remove {item.name}: {e}")
 
         status_data["status"] = "success"
         status_data["removed_intermediates"] = removed_files
         status_data["elapsed_seconds"] = round(time.time() - start_time, 2)
         status_data["deliverables"] = {
-            "transcript": str(final_transcript_p),
-            "intent": str(final_intent_p),
             "evaluation": str(final_eval_p),
         }
-
-        with status_p.open("w", encoding="utf-8") as f:
-            json.dump(status_data, f, ensure_ascii=False, indent=2)
 
         logger.info(
             f"Pipeline complete for {input_p.name} in {status_data['elapsed_seconds']}s -> {out_dir}"

@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Support Call Evaluation Dashboard</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #06b6d4;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1;
+      --slate-400: #94a3b8;
+      --slate-500: #64748b;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+      --card-bg: #ffffff;
+      --border-radius: 12px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--slate-50);
+      color: var(--slate-800);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+      color: white;
+      padding: 1.5rem 2rem;
+      box-shadow: var(--shadow);
+    }
+
+    .header-content {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .header-title h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .header-title p {
+      color: #c7d2fe;
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+    }
+
+    .server-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      padding: 0.4rem 0.8rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #34d399;
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.9); }
+    }
+
+    main {
+      max-width: 1300px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      width: 100%;
+      flex: 1;
+    }
+
+    /* Upload & Input Section */
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--slate-200);
+      margin-bottom: 2rem;
+      overflow: hidden;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow);
+    }
+
+    .card-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--slate-100);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #fafbfc;
+    }
+
+    .card-header h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--slate-900);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-body {
+      padding: 1.5rem;
+    }
+
+    /* Tabs for Upload modes */
+    .tabs-nav {
+      display: flex;
+      border-bottom: 2px solid var(--slate-200);
+      margin-bottom: 1.5rem;
+      gap: 0.5rem;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--slate-500);
+      cursor: pointer;
+      position: relative;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: var(--primary);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--slate-300);
+      border-radius: var(--border-radius);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      background: var(--slate-50);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background-color: var(--primary-light);
+    }
+
+    .dropzone-icon {
+      font-size: 2.5rem;
+      color: var(--primary);
+      margin-bottom: 0.75rem;
+    }
+
+    .dropzone p {
+      color: var(--slate-600);
+      font-size: 0.95rem;
+    }
+
+    .dropzone span {
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: underline;
+    }
+
+    .dropzone .hint {
+      color: var(--slate-400);
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    /* Queue & File list */
+    .file-list {
+      margin-top: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .file-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      background: var(--slate-100);
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+
+    .file-chip-name {
+      font-weight: 500;
+      color: var(--slate-700);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 400px;
+    }
+
+    .file-chip-size {
+      color: var(--slate-400);
+      font-size: 0.75rem;
+      margin-left: 0.5rem;
+    }
+
+    .action-bar {
+      margin-top: 1.5rem;
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 0.65rem 1.35rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    }
+
+    .btn-secondary {
+      background-color: var(--slate-200);
+      color: var(--slate-700);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--slate-300);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Progress & Loader */
+    .progress-box {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: var(--slate-50);
+      border-radius: 8px;
+      border: 1px solid var(--slate-200);
+      display: none;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--slate-700);
+    }
+
+    .progress-bar-bg {
+      height: 8px;
+      background: var(--slate-200);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4f46e5, #06b6d4);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-status {
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--slate-500);
+    }
+
+    /* DROPDOWN WHEN FILES > 2 */
+    .dropdown-banner {
+      background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+      border: 2px solid #c7d2fe;
+      border-radius: var(--border-radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dropdown-banner-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .dropdown-badge {
+      background: var(--primary);
+      color: white;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+    }
+
+    .dropdown-label {
+      font-weight: 600;
+      color: var(--slate-800);
+      font-size: 1rem;
+    }
+
+    .dropdown-select-wrapper {
+      position: relative;
+      min-width: 340px;
+    }
+
+    .dropdown-select {
+      width: 100%;
+      padding: 0.65rem 2.5rem 0.65rem 1rem;
+      border-radius: 8px;
+      border: 1.5px solid var(--primary);
+      background-color: white;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--slate-800);
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .dropdown-arrow {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: var(--primary);
+      font-size: 0.8rem;
+    }
+
+    /* Scorecard Display Area */
+    .results-area {
+      display: none;
+    }
+
+    .scorecard-hero {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: white;
+      border-radius: var(--border-radius);
+      padding: 2rem;
+      margin-bottom: 1.75rem;
+      box-shadow: var(--shadow-lg);
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    @media (max-width: 768px) {
+      .scorecard-hero {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+    }
+
+    .total-score-circle {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: conic-gradient(var(--success) calc(var(--score-pct, 0) * 1%), #334155 0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto;
+      position: relative;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+    }
+
+    .total-score-inner {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .score-val {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1;
+    }
+
+    .score-max {
+      font-size: 0.75rem;
+      color: var(--slate-400);
+      margin-top: 0.2rem;
+    }
+
+    .hero-meta h3 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: white;
+    }
+
+    .meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .badge-resolved { background-color: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669; }
+    .badge-unresolved { background-color: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #dc2626; }
+    .badge-partially_resolved { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #d97706; }
+    .badge-pending_follow_up { background-color: rgba(6, 182, 212, 0.2); color: #38bdf8; border: 1px solid #0891b2; }
+    .badge-unclear { background-color: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid #64748b; }
+
+    /* Sub-scores Grid */
+    .subscores-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .subscore-card {
+      background: white;
+      border-radius: var(--border-radius);
+      padding: 1.25rem;
+      border: 1px solid var(--slate-200);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .subscore-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .subscore-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--slate-700);
+    }
+
+    .subscore-number {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .score-bar {
+      height: 8px;
+      background: var(--slate-100);
+      border-radius: 9999px;
+      overflow: hidden;
+      margin-bottom: 0.75rem;
+    }
+
+    .score-bar-inner {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 9999px;
+      width: 0%;
+      transition: width 0.6s ease;
+    }
+
+    .subscore-rationale {
+      font-size: 0.825rem;
+      color: var(--slate-600);
+      line-height: 1.45;
+    }
+
+    /* Details Section */
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.75rem;
+    }
+
+    @media (max-width: 768px) {
+      .details-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .item-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .item-list li {
+      background: var(--slate-50);
+      border-left: 3px solid var(--primary);
+      padding: 0.6rem 0.85rem;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.85rem;
+      color: var(--slate-700);
+      line-height: 1.4;
+    }
+
+    /* Evidence Table */
+    .evidence-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+
+    .evidence-table th {
+      background: var(--slate-100);
+      color: var(--slate-700);
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      font-weight: 600;
+      border-bottom: 2px solid var(--slate-200);
+    }
+
+    .evidence-table td {
+      padding: 0.75rem 0.85rem;
+      border-bottom: 1px solid var(--slate-200);
+      color: var(--slate-700);
+      vertical-align: top;
+    }
+
+    .evidence-table tr:hover {
+      background-color: var(--slate-50);
+    }
+
+    .timestamp-badge {
+      background: var(--slate-200);
+      color: var(--slate-700);
+      font-family: monospace;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+
+    .speaker-badge {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+
+    .quote-text {
+      font-style: italic;
+      color: var(--slate-800);
+    }
+
+    /* Comparison Table for batch */
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 1rem;
+    }
+
+    .summary-table th {
+      background: var(--slate-100);
+      color: var(--slate-700);
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      font-weight: 600;
+      border-bottom: 2px solid var(--slate-200);
+    }
+
+    .summary-table td {
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--slate-200);
+      cursor: pointer;
+    }
+
+    .summary-table tr:hover td {
+      background-color: var(--primary-light);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--slate-400);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      color: var(--slate-300);
+    }
+
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--slate-400);
+      border-top: 1px solid var(--slate-200);
+      background: white;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <div class="header-title">
+        <h1>📊 Customer Support Call Scorecard Dashboard</h1>
+        <p>Real-time speech quality evaluation, intent extraction, and automated scoring</p>
+      </div>
+      <div class="server-status" id="serverStatusBadge">
+        <div class="status-dot" id="serverStatusDot"></div>
+        <span id="serverStatusText">Dashboard Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Upload / Input Section -->
+    <div class="card">
+      <div class="card-header">
+        <h2>📥 Process Audio Calls</h2>
+        <span style="font-size: 0.8rem; color: var(--slate-500);">Accepts Single File, Folder, or ZIP Archive</span>
+      </div>
+      <div class="card-body">
+        <!-- Tabs -->
+        <div class="tabs-nav">
+          <button class="tab-btn active" onclick="switchTab('single')">Single Audio</button>
+          <button class="tab-btn" onclick="switchTab('folder')">Folder of Calls</button>
+          <button class="tab-btn" onclick="switchTab('zip')">ZIP Archive</button>
+          <button class="tab-btn" onclick="switchTab('json')">View Existing Score (.json)</button>
+        </div>
+
+        <!-- Single File Tab -->
+        <div id="tab-single" class="tab-pane active">
+          <div class="dropzone" id="dropzone-single" onclick="document.getElementById('input-single').click()">
+            <div class="dropzone-icon">🎙️</div>
+            <p>Drag & drop a call recording here, or <span>browse file</span></p>
+            <p class="hint">Supports .mp3, .wav, .m4a, .ogg, .flac, .aac</p>
+            <input type="file" id="input-single" class="file-input" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac">
+          </div>
+        </div>
+
+        <!-- Folder Tab -->
+        <div id="tab-folder" class="tab-pane">
+          <div class="dropzone" id="dropzone-folder" onclick="document.getElementById('input-folder').click()">
+            <div class="dropzone-icon">📁</div>
+            <p>Select or drag an entire <span>folder of audio recordings</span></p>
+            <p class="hint">Processes all call recordings recursively</p>
+            <input type="file" id="input-folder" class="file-input" webkitdirectory directory multiple>
+          </div>
+        </div>
+
+        <!-- ZIP Tab -->
+        <div id="tab-zip" class="tab-pane">
+          <div class="dropzone" id="dropzone-zip" onclick="document.getElementById('input-zip').click()">
+            <div class="dropzone-icon">📦</div>
+            <p>Upload a <span>.zip archive</span> of audio calls</p>
+            <p class="hint">Automatically unzips and evaluates each recording</p>
+            <input type="file" id="input-zip" class="file-input" accept=".zip,.tar,.tar.gz,.gz">
+          </div>
+        </div>
+
+        <!-- View Existing JSON Tab -->
+        <div id="tab-json" class="tab-pane">
+          <div class="dropzone" id="dropzone-json" onclick="document.getElementById('input-json').click()">
+            <div class="dropzone-icon">📋</div>
+            <p>Upload existing <span>call_evaluation.json</span> file(s)</p>
+            <p class="hint">Instant visualization without reprocessing</p>
+            <input type="file" id="input-json" class="file-input" accept=".json" multiple>
+          </div>
+        </div>
+
+        <!-- Selected Files List -->
+        <div id="fileList" class="file-list" style="display: none;"></div>
+
+        <!-- Progress Box -->
+        <div id="progressBox" class="progress-box">
+          <div class="progress-header">
+            <span id="progressTitle">Processing Audio...</span>
+            <span id="progressPercent">0%</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div id="progressBarFill" class="progress-bar-fill"></div>
+          </div>
+          <div id="progressStatus" class="progress-status">Initiating pipeline stages...</div>
+        </div>
+
+        <!-- Indic-Conformer Language Selector -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; padding: 0.75rem 1rem; background: var(--slate-100); border-radius: 8px; border: 1px solid var(--slate-200);">
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--slate-700);">
+            <span>🇮🇳 ASR Engine:</span>
+            <span style="font-weight: 600; color: var(--primary);">ai4bharat/indic-conformer-600m-multilingual</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <label for="asrLangSelect" style="font-weight: 600; color: var(--slate-700);">Call Language:</label>
+            <select id="asrLangSelect" style="padding: 0.35rem 0.75rem; border-radius: 6px; border: 1px solid var(--slate-300); font-size: 0.85rem; font-weight: 500; background: white; cursor: pointer;">
+              <option value="ta" selected>Tamil (தமிழ் - ta)</option>
+              <option value="en">English (en)</option>
+              <option value="hi">Hindi (हिन्दी - hi)</option>
+              <option value="te">Telugu (తెలుగు - te)</option>
+              <option value="kn">Kannada (ಕನ್ನಡ - kn)</option>
+              <option value="ml">Malayalam (മലയാളം - ml)</option>
+              <option value="mr">Marathi (मराठी - mr)</option>
+              <option value="bn">Bengali (বাংলা - bn)</option>
+              <option value="gu">Gujarati (ગુજરાતી - gu)</option>
+              <option value="pa">Punjabi (ਪੰਜਾਬੀ - pa)</option>
+              <option value="or">Odia (ଓଡ଼ିଆ - or)</option>
+              <option value="ur">Urdu (اردو - ur)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="action-bar">
+          <button id="clearBtn" class="btn btn-secondary" onclick="clearSelectedFiles()" style="display: none;">Clear</button>
+          <button id="loadSampleBtn" class="btn btn-secondary" onclick="loadSampleEvaluation()">Load Sample (Anusha Call)</button>
+          <button id="processBtn" class="btn btn-primary" onclick="startProcessing()" disabled>
+            <span>🚀 Process Call(s)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DROPDOWN BANNER: SHOWN WHEN FILES > 2 -->
+    <div id="dropdownBanner" class="dropdown-banner">
+      <div class="dropdown-banner-left">
+        <span class="dropdown-badge" id="dropdownCountBadge">3 Calls</span>
+        <div>
+          <div class="dropdown-label">Select Audio Call to View Scores</div>
+          <div style="font-size: 0.8rem; color: var(--slate-500);">Files &gt; 2 evaluated: Use dropdown to switch between calls</div>
+        </div>
+      </div>
+      <div class="dropdown-select-wrapper">
+        <select id="callDropdown" class="dropdown-select" onchange="onCallDropdownSelected(this.value)">
+          <!-- Options populated dynamically -->
+        </select>
+        <span class="dropdown-arrow">▼</span>
+      </div>
+    </div>
+
+    <!-- Multi-file Summary Overview (collapsible toggle when files > 2) -->
+    <div id="summaryCard" class="card" style="display: none;">
+      <div class="card-header" style="cursor: pointer;" onclick="toggleSummaryTable()">
+        <h2>📑 Batch Score Overview (<span id="summaryTotalCount">0</span> calls)</h2>
+        <span id="summaryToggleIcon" style="font-size: 0.9rem; color: var(--slate-500);">[Hide Table]</span>
+      </div>
+      <div class="card-body" id="summaryTableBody" style="padding: 0;">
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>Audio File</th>
+              <th>Total Score</th>
+              <th>Professionalism</th>
+              <th>Respectfulness</th>
+              <th>Politeness</th>
+              <th>Resolution</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="summaryTableRows">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">🎧</div>
+      <h3>No Call Evaluations Yet</h3>
+      <p style="margin-top: 0.5rem; font-size: 0.9rem;">Upload an audio file, folder, ZIP archive, or click "Load Sample" above to see the score deliverable.</p>
+    </div>
+
+    <!-- RESULTS DISPLAY AREA (Single page update) -->
+    <div id="resultsArea" class="results-area">
+
+      <!-- Hero Scorecard -->
+      <div class="scorecard-hero">
+        <div class="total-score-circle" id="heroScoreCircle" style="--score-pct: 90;">
+          <div class="total-score-inner">
+            <span class="score-val" id="heroScoreVal">93.3</span>
+            <span class="score-max">OVERALL / 100</span>
+          </div>
+        </div>
+        <div class="hero-meta">
+          <h3 id="heroFileName">Call Evaluation Scorecard</h3>
+          <p id="heroExplanation" style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.4; margin-top: 0.4rem;">
+            Resolution details will appear here.
+          </p>
+          <div class="meta-tags">
+            <span id="heroResolutionBadge" class="badge badge-resolved">Resolved</span>
+            <span id="heroIntentReviewBadge" class="badge" style="background: rgba(255,255,255,0.15); color: white;">Intent: Supported</span>
+            <span id="heroEvidenceCount" class="badge" style="background: rgba(255,255,255,0.15); color: white;">6 Evidence Points</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subscores Grid -->
+      <div class="subscores-grid">
+        <!-- Professionalism -->
+        <div class="subscore-card">
+          <div class="subscore-header">
+            <span class="subscore-title">Professionalism</span>
+            <span class="subscore-number" id="subscoreProf">90</span>
+          </div>
+          <div class="score-bar">
+            <div class="score-bar-inner" id="subscoreProfBar" style="width: 90%;"></div>
+          </div>
+          <p class="subscore-rationale" id="subscoreProfRationale">Structured communication and technical terminology.</p>
+        </div>
+
+        <!-- Respectfulness -->
+        <div class="subscore-card">
+          <div class="subscore-header">
+            <span class="subscore-title">Respectfulness</span>
+            <span class="subscore-number" id="subscoreResp" style="color: var(--success);">100</span>
+          </div>
+          <div class="score-bar">
+            <div class="score-bar-inner" id="subscoreRespBar" style="width: 100%; background: var(--success);"></div>
+          </div>
+          <p class="subscore-rationale" id="subscoreRespRationale">Deferential phrasing and consistent respect.</p>
+        </div>
+
+        <!-- Politeness -->
+        <div class="subscore-card">
+          <div class="subscore-header">
+            <span class="subscore-title">Politeness</span>
+            <span class="subscore-number" id="subscorePol" style="color: var(--info);">90</span>
+          </div>
+          <div class="score-bar">
+            <div class="score-bar-inner" id="subscorePolBar" style="width: 90%; background: var(--info);"></div>
+          </div>
+          <p class="subscore-rationale" id="subscorePolRationale">Proactive assistance and courteous tone.</p>
+        </div>
+      </div>
+
+      <!-- Details Grid (Client Needs vs Agent Actions) -->
+      <div class="details-grid">
+        <!-- Client Needs -->
+        <div class="card" style="margin-bottom: 0;">
+          <div class="card-header">
+            <h2>🎯 Client Needs Identified</h2>
+          </div>
+          <div class="card-body">
+            <ul class="item-list" id="clientNeedsList">
+              <!-- Dynamic -->
+            </ul>
+          </div>
+        </div>
+
+        <!-- Agent Actions -->
+        <div class="card" style="margin-bottom: 0;">
+          <div class="card-header">
+            <h2>🛠️ Agent Actions Taken</h2>
+          </div>
+          <div class="card-body">
+            <ul class="item-list" id="agentActionsList">
+              <!-- Dynamic -->
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evidence Section -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+          <h2>💬 Transcript Evidence & Quotations</h2>
+        </div>
+        <div class="card-body" style="overflow-x: auto;">
+          <table class="evidence-table">
+            <thead>
+              <tr>
+                <th style="width: 110px;">Timestamp</th>
+                <th style="width: 120px;">Speaker</th>
+                <th style="width: 130px;">Category</th>
+                <th>Quote Excerpt</th>
+                <th>Interpretation</th>
+              </tr>
+            </thead>
+            <tbody id="evidenceTableBody">
+              <!-- Dynamic -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Export / Raw Deliverable -->
+      <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
+        <button class="btn btn-secondary" onclick="downloadCurrentEvaluationJson()">💾 Download call_evaluation.json</button>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    Customer Support Quality Pipeline &bull; Automated Scoring &bull; Only Score Deliverable Preserved
+  </footer>
+
+  <script>
+    // State
+    let selectedFiles = [];
+    let currentMode = 'single';
+    let evaluations = []; // Array of { id, filename, data }
+    let selectedCallIndex = 0;
+
+    // Check backend server on load
+    window.addEventListener('DOMContentLoaded', () => {
+      setupDropzones();
+      checkBackendConnection();
+      fetchExistingResults();
+    });
+
+    function checkBackendConnection() {
+      fetch('/api/ping')
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('serverStatusDot').style.backgroundColor = '#10b981';
+          document.getElementById('serverStatusText').textContent = 'Backend Connected';
+        })
+        .catch(() => {
+          document.getElementById('serverStatusDot').style.backgroundColor = '#f59e0b';
+          document.getElementById('serverStatusText').textContent = 'Static / Offline Mode';
+        });
+    }
+
+    function fetchExistingResults() {
+      fetch('/api/results')
+        .then(res => res.json())
+        .then(items => {
+          if (Array.isArray(items) && items.length > 0) {
+            evaluations = items;
+            renderEvaluations();
+          }
+        })
+        .catch(() => {
+          // If no backend endpoint, check if sample is available
+        });
+    }
+
+    // Tabs
+    function switchTab(mode) {
+      currentMode = mode;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+      event.target.classList.add('active');
+      document.getElementById('tab-' + mode).classList.add('active');
+    }
+
+    // Dropzone & File Handling
+    function setupDropzones() {
+      ['single', 'folder', 'zip', 'json'].forEach(type => {
+        const dropzone = document.getElementById('dropzone-' + type);
+        const input = document.getElementById('input-' + type);
+
+        if (!dropzone || !input) return;
+
+        ['dragenter', 'dragover'].forEach(name => {
+          dropzone.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+          });
+        });
+
+        ['dragleave', 'drop'].forEach(name => {
+          dropzone.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+          });
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleSelectedFiles(e.dataTransfer.files, type);
+          }
+        });
+
+        input.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleSelectedFiles(e.target.files, type);
+          }
+        });
+      });
+    }
+
+    function handleSelectedFiles(fileList, type) {
+      if (type === 'json') {
+        // Direct JSON loading without pipeline execution
+        Array.from(fileList).forEach(file => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const data = JSON.parse(e.target.result);
+              evaluations.push({
+                id: 'eval-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+                filename: data.audio_file || file.name,
+                data: data
+              });
+              renderEvaluations();
+            } catch (err) {
+              alert('Invalid JSON file: ' + file.name);
+            }
+          };
+          reader.readAsText(file);
+        });
+        return;
+      }
+
+      selectedFiles = Array.from(fileList);
+      renderFileList();
+      document.getElementById('processBtn').disabled = selectedFiles.length === 0;
+      document.getElementById('clearBtn').style.display = selectedFiles.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    function renderFileList() {
+      const container = document.getElementById('fileList');
+      if (selectedFiles.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+      }
+
+      container.style.display = 'flex';
+      container.innerHTML = selectedFiles.map((file, idx) => `
+        <div class="file-chip">
+          <div class="file-chip-name">🎵 ${file.webkitRelativePath || file.name}</div>
+          <div class="file-chip-size">${formatBytes(file.size)}</div>
+        </div>
+      `).join('');
+    }
+
+    function clearSelectedFiles() {
+      selectedFiles = [];
+      renderFileList();
+      document.getElementById('processBtn').disabled = true;
+      document.getElementById('clearBtn').style.display = 'none';
+      ['single', 'folder', 'zip', 'json'].forEach(id => {
+        const inp = document.getElementById('input-' + id);
+        if (inp) inp.value = '';
+      });
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Process Files
+    async function startProcessing() {
+      if (selectedFiles.length === 0) return;
+
+      const progressBox = document.getElementById('progressBox');
+      const progressBar = document.getElementById('progressBarFill');
+      const progressPercent = document.getElementById('progressPercent');
+      const progressStatus = document.getElementById('progressStatus');
+      const processBtn = document.getElementById('processBtn');
+
+      progressBox.style.display = 'block';
+      processBtn.disabled = true;
+      progressBar.style.width = '10%';
+      progressPercent.textContent = '10%';
+      progressStatus.textContent = 'Uploading ' + selectedFiles.length + ' file(s) to server...';
+
+      const formData = new FormData();
+      formData.append('mode', currentMode);
+      const asrLang = document.getElementById('asrLangSelect')?.value || 'ta';
+      formData.append('asr_lang', asrLang);
+      selectedFiles.forEach(file => {
+        formData.append('files', file, file.webkitRelativePath || file.name);
+      });
+
+      try {
+        progressBar.style.width = '35%';
+        progressPercent.textContent = '35%';
+        progressStatus.textContent = 'Executing pipeline (Diarization -> Whisper -> Punctuation -> Qwen Scorecard)...';
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) {
+          throw new Error('Server returned HTTP ' + res.status);
+        }
+
+        const data = await res.json();
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+        progressStatus.textContent = 'Done! Scores generated.';
+
+        if (Array.isArray(data.evaluations)) {
+          data.evaluations.forEach(ev => evaluations.push(ev));
+        } else if (data.data) {
+          evaluations.push(data);
+        }
+
+        setTimeout(() => {
+          progressBox.style.display = 'none';
+          clearSelectedFiles();
+          renderEvaluations();
+        }, 600);
+
+      } catch (err) {
+        progressStatus.textContent = 'Error: ' + err.message + '. (If backend is offline, load existing JSON scorecards directly via the "View Existing Score" tab).';
+        progressBar.style.background = 'var(--danger)';
+        processBtn.disabled = false;
+      }
+    }
+
+    // Load Sample Evaluation (Anusha Call)
+    function loadSampleEvaluation() {
+      const sample = {
+        "audio_file": "anusha_call_support_sample.mp3",
+        "intent_review": "supported",
+        "client_needs": [
+          "Have the subject names and employee IDs corrected in NLP",
+          "Receive confirmation that the error Excel sheet has been shared via email",
+          "Get clarification on missing employee data in NLP"
+        ],
+        "agent_actions": [
+          "Ma'am, you have requested for a call back on this member, ma'am. Yes, ma'am. What's the problem?",
+          "Identifies incorrect subject names and missing employee IDs in the system",
+          "Confirms error Excel sheet was uploaded and shared via email",
+          "Provides instructions on how details must be added into NLP",
+          "Offers continuous clarification on the same email loop"
+        ],
+        "resolution": {
+          "status": "unresolved",
+          "explanation": "Agent identified data discrepancies and shared the error spreadsheet. However, data correction was not yet confirmed completed on the call."
+        },
+        "scorecard": {
+          "professionalism_score": 90.0,
+          "respectfulness_score": 100.0,
+          "politeness_score": 90.0,
+          "total_score": 93.3,
+          "professionalism_rationale": "Agent maintains clear, structured communication and uses appropriate technical terms without deviation.",
+          "respectfulness_rationale": "Repeated use of 'ma'am' and deferential phrasing shows consistent respect for the client's position.",
+          "politeness_rationale": "Agent proactively shares information and offers clarification with courteous language and cultural appropriateness.",
+          "evidence": [
+            {
+              "timestamp": "14.36-20.84",
+              "speaker_id": "SPEAKER_00",
+              "quote": "Ma'am, you have requested for a call back on this member, ma'am. Yes, ma'am. Ma'am, what's the problem, ma'am.",
+              "category": "respectfulness",
+              "interpretation": "Repeated use of respectful terms demonstrates attentive client service."
+            },
+            {
+              "timestamp": "27.79-33.63",
+              "speaker_id": "SPEAKER_00",
+              "quote": "the subject names are incorrect and few of them we haven't found and the employee ids and names we did not find in NLP.",
+              "category": "professionalism",
+              "interpretation": "Precise identification of technical data issues."
+            },
+            {
+              "timestamp": "22.90-27.28",
+              "speaker_id": "SPEAKER_00",
+              "quote": "when we have uploaded mom, I have shared you the error excel sheet.",
+              "category": "politeness",
+              "interpretation": "Proactive follow-up regarding the error sheet."
+            }
+          ]
+        },
+        "uncertainties": []
+      };
+
+      // Add a couple of sample calls to showcase > 2 dropdown behavior
+      evaluations = [
+        { id: "call-001", filename: "anusha_call_support_sample.mp3", data: sample },
+        { 
+          id: "call-002", 
+          filename: "billing_inquiry_call_102.wav", 
+          data: {
+            ...sample,
+            audio_file: "billing_inquiry_call_102.wav",
+            resolution: { status: "resolved", explanation: "Billing inquiry answered and adjusted invoice sent." },
+            scorecard: {
+              ...sample.scorecard,
+              professionalism_score: 95.0,
+              respectfulness_score: 95.0,
+              politeness_score: 98.0,
+              total_score: 96.0
+            }
+          }
+        },
+        { 
+          id: "call-003", 
+          filename: "technical_escalation_701.mp3", 
+          data: {
+            ...sample,
+            audio_file: "technical_escalation_701.mp3",
+            resolution: { status: "pending_follow_up", explanation: "Issue escalated to L2 engineering team." },
+            scorecard: {
+              ...sample.scorecard,
+              professionalism_score: 85.0,
+              respectfulness_score: 90.0,
+              politeness_score: 80.0,
+              total_score: 85.0
+            }
+          }
+        }
+      ];
+
+      renderEvaluations();
+    }
+
+    // MAIN RENDER FUNCTION
+    function renderEvaluations() {
+      const emptyState = document.getElementById('emptyState');
+      const resultsArea = document.getElementById('resultsArea');
+      const dropdownBanner = document.getElementById('dropdownBanner');
+      const summaryCard = document.getElementById('summaryCard');
+
+      if (!evaluations || evaluations.length === 0) {
+        emptyState.style.display = 'block';
+        resultsArea.style.display = 'none';
+        dropdownBanner.style.display = 'none';
+        summaryCard.style.display = 'none';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      resultsArea.style.display = 'block';
+
+      // "when files are > 2 then when clicked it shall open a dropdown to show the results"
+      if (evaluations.length > 2) {
+        dropdownBanner.style.display = 'flex';
+        summaryCard.style.display = 'block';
+        populateDropdown();
+        populateSummaryTable();
+      } else {
+        dropdownBanner.style.display = 'none';
+        summaryCard.style.display = 'none';
+      }
+
+      // Render the currently selected call
+      if (selectedCallIndex >= evaluations.length) {
+        selectedCallIndex = 0;
+      }
+      renderSingleScorecard(evaluations[selectedCallIndex]);
+    }
+
+    function populateDropdown() {
+      const select = document.getElementById('callDropdown');
+      document.getElementById('dropdownCountBadge').textContent = evaluations.length + ' Calls Evaluated';
+
+      select.innerHTML = evaluations.map((item, idx) => {
+        const sc = item.data?.scorecard || {};
+        const score = sc.total_score != null ? sc.total_score.toFixed(1) : 'N/A';
+        const res = item.data?.resolution?.status || 'unclear';
+        const fname = item.filename || item.data?.audio_file || ('Call #' + (idx + 1));
+        return `<option value="${idx}" ${idx === selectedCallIndex ? 'selected' : ''}>
+          ${fname} &bull; Score: ${score}/100 &bull; [${res.toUpperCase()}]
+        </option>`;
+      }).join('');
+    }
+
+    function onCallDropdownSelected(idx) {
+      selectedCallIndex = parseInt(idx, 10);
+      renderSingleScorecard(evaluations[selectedCallIndex]);
+    }
+
+    function populateSummaryTable() {
+      const tbody = document.getElementById('summaryTableRows');
+      document.getElementById('summaryTotalCount').textContent = evaluations.length;
+
+      tbody.innerHTML = evaluations.map((item, idx) => {
+        const sc = item.data?.scorecard || {};
+        const total = sc.total_score != null ? sc.total_score.toFixed(1) : '-';
+        const prof = sc.professionalism_score != null ? sc.professionalism_score.toFixed(1) : '-';
+        const resp = sc.respectfulness_score != null ? sc.respectfulness_score.toFixed(1) : '-';
+        const pol = sc.politeness_score != null ? sc.politeness_score.toFixed(1) : '-';
+        const res = item.data?.resolution?.status || 'unclear';
+        const fname = item.filename || item.data?.audio_file || ('Call #' + (idx + 1));
+
+        return `
+          <tr onclick="selectCallFromTable(${idx})">
+            <td><strong>${fname}</strong></td>
+            <td><span style="font-weight: 700; color: var(--primary);">${total}</span></td>
+            <td>${prof}</td>
+            <td>${resp}</td>
+            <td>${pol}</td>
+            <td><span class="badge badge-${res}">${res}</span></td>
+            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">View</button></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function selectCallFromTable(idx) {
+      selectedCallIndex = idx;
+      document.getElementById('callDropdown').value = idx;
+      renderSingleScorecard(evaluations[selectedCallIndex]);
+      window.scrollTo({ top: document.getElementById('resultsArea').offsetTop - 30, behavior: 'smooth' });
+    }
+
+    function toggleSummaryTable() {
+      const body = document.getElementById('summaryTableBody');
+      const icon = document.getElementById('summaryToggleIcon');
+      if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.textContent = '[Hide Table]';
+      } else {
+        body.style.display = 'none';
+        icon.textContent = '[Show Table]';
+      }
+    }
+
+    // Render single scorecard onto the same page
+    function renderSingleScorecard(evalObj) {
+      if (!evalObj || !evalObj.data) return;
+      const d = evalObj.data;
+      const sc = d.scorecard || {};
+
+      // 1. Hero
+      const totalScore = sc.total_score != null ? Number(sc.total_score).toFixed(1) : 'N/A';
+      document.getElementById('heroScoreVal').textContent = totalScore;
+      const pct = sc.total_score != null ? Math.min(100, Math.max(0, sc.total_score)) : 0;
+      document.getElementById('heroScoreCircle').style.setProperty('--score-pct', pct);
+
+      document.getElementById('heroFileName').textContent = evalObj.filename || d.audio_file || 'Call Evaluation Scorecard';
+      document.getElementById('heroExplanation').textContent = d.resolution?.explanation || 'No resolution explanation provided.';
+
+      // Badges
+      const resStatus = d.resolution?.status || 'unclear';
+      const badge = document.getElementById('heroResolutionBadge');
+      badge.className = 'badge badge-' + resStatus;
+      badge.textContent = 'Status: ' + resStatus.replace('_', ' ');
+
+      document.getElementById('heroIntentReviewBadge').textContent = 'Intent: ' + (d.intent_review || 'reviewed');
+      const evidenceCount = Array.isArray(sc.evidence) ? sc.evidence.length : 0;
+      document.getElementById('heroEvidenceCount').textContent = evidenceCount + ' Evidence Quotes';
+
+      // 2. Subscores
+      setSubscore('subscoreProf', 'subscoreProfBar', 'subscoreProfRationale', sc.professionalism_score, sc.professionalism_rationale);
+      setSubscore('subscoreResp', 'subscoreRespBar', 'subscoreRespRationale', sc.respectfulness_score, sc.respectfulness_rationale);
+      setSubscore('subscorePol', 'subscorePolBar', 'subscorePolRationale', sc.politeness_score, sc.politeness_rationale);
+
+      // 3. Client Needs & Agent Actions
+      const needsUl = document.getElementById('clientNeedsList');
+      if (Array.isArray(d.client_needs) && d.client_needs.length > 0) {
+        needsUl.innerHTML = d.client_needs.map(n => `<li>${escapeHtml(n)}</li>`).join('');
+      } else {
+        needsUl.innerHTML = '<li style="color: var(--slate-400);">No specific client needs recorded.</li>';
+      }
+
+      const actionsUl = document.getElementById('agentActionsList');
+      if (Array.isArray(d.agent_actions) && d.agent_actions.length > 0) {
+        actionsUl.innerHTML = d.agent_actions.map(a => `<li>${escapeHtml(a)}</li>`).join('');
+      } else {
+        actionsUl.innerHTML = '<li style="color: var(--slate-400);">No specific agent actions recorded.</li>';
+      }
+
+      // 4. Evidence Table
+      const evTbody = document.getElementById('evidenceTableBody');
+      if (Array.isArray(sc.evidence) && sc.evidence.length > 0) {
+        evTbody.innerHTML = sc.evidence.map(ev => `
+          <tr>
+            <td><span class="timestamp-badge">${escapeHtml(ev.timestamp || '-')}</span></td>
+            <td><span class="speaker-badge">${escapeHtml(ev.speaker_id || '-')}</span></td>
+            <td><span style="font-weight: 600; text-transform: capitalize;">${escapeHtml(ev.category || '-')}</span></td>
+            <td class="quote-text">"${escapeHtml(ev.quote || '')}"</td>
+            <td>${escapeHtml(ev.interpretation || '')}</td>
+          </tr>
+        `).join('');
+      } else {
+        evTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--slate-400);">No direct quote evidence recorded.</td></tr>`;
+      }
+    }
+
+    function setSubscore(valId, barId, ratId, score, rationale) {
+      const valEl = document.getElementById(valId);
+      const barEl = document.getElementById(barId);
+      const ratEl = document.getElementById(ratId);
+
+      const num = score != null ? Number(score).toFixed(1) : 'N/A';
+      valEl.textContent = num;
+      barEl.style.width = (score != null ? Math.min(100, Math.max(0, score)) : 0) + '%';
+      ratEl.textContent = rationale || 'No rationale available.';
+    }
+
+    function downloadCurrentEvaluationJson() {
+      if (!evaluations[selectedCallIndex]) return;
+      const data = evaluations[selectedCallIndex].data;
+      const str = JSON.stringify(data, null, 2);
+      const blob = new Blob([str], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (evaluations[selectedCallIndex].filename ? evaluations[selectedCallIndex].filename.replace(/\.[^/.]+$/, "") + "_" : "") + "call_evaluation.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>

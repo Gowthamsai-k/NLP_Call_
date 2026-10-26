@@ -61,6 +61,8 @@ def process_audio_folder(
     whisper_gpu_mem: float = WHISPER_GPU_MEM,
     intent_gpu_mem: float = INTENT_GPU_MEM,
     eval_gpu_mem: float = EVAL_GPU_MEM,
+    asr_lang: Optional[str] = None,
+    asr_decoder: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Processes all audio files in an input folder with failure isolation."""
     batch_start = time.time()
@@ -102,6 +104,8 @@ def process_audio_folder(
                 whisper_gpu_mem=whisper_gpu_mem,
                 intent_gpu_mem=intent_gpu_mem,
                 eval_gpu_mem=eval_gpu_mem,
+                asr_lang=asr_lang,
+                asr_decoder=asr_decoder,
             )
             results.append(call_res)
             if call_res.get("skipped"):
