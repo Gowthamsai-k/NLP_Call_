@@ -59,7 +59,7 @@ def run_transcription(
         f"Audio loaded for ASR: {duration:.2f}s at {samplerate} Hz across {len(segments)} turns"
     )
 
-    lang_code = language or ASR_LANG or "ta"
+    lang_code = language or ASR_LANG or "en"
     decoder_type = decoder or ASR_DECODER or "ctc"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

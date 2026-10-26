@@ -22,7 +22,7 @@ MIN_TURN_DURATION_S = 0.1
 SILENCE_THRESHOLD = 1e-5
 
 # Indic-Conformer ASR Configuration (IN-22 Languages)
-ASR_LANG = os.environ.get("ASR_LANG", "ta")  # Default to 'ta' (Tamil), supports 'hi', 'en', 'te', 'kn', etc.
+ASR_LANG = os.environ.get("ASR_LANG", "en")  # Default to 'en' (English), supports 'ta', 'hi', 'te', 'kn', etc.
 ASR_DECODER = os.environ.get("ASR_DECODER", "ctc")  # 'ctc' or 'rnnt' 
 
 WHISPER_MAX_MODEL_LEN = 448
@@ -102,7 +102,7 @@ Keep explanations concise and output only relevant evidence.
 EVAL_SCHEMA = """
 Return one JSON object with exactly this structure:
 {
-  "intent_review": "string",
+  "intent_review": "supported | partially_supported | unclear",
   "client_needs": ["string"],
   "agent_actions": ["string"],
   "resolution": {
@@ -110,10 +110,10 @@ Return one JSON object with exactly this structure:
     "explanation": "string"
   },
   "scorecard": {
-    "professionalism_score": null,
-    "respectfulness_score": null,
-    "politeness_score": null,
-    "total_score": null,
+    "professionalism_score": 85.0,
+    "respectfulness_score": 90.0,
+    "politeness_score": 85.0,
+    "total_score": 86.7,
     "professionalism_rationale": "string",
     "respectfulness_rationale": "string",
     "politeness_rationale": "string",
@@ -129,15 +129,11 @@ Return one JSON object with exactly this structure:
   },
   "uncertainties": ["string"]
 }
-Use numeric scores from 0 to 100 when the agent is validated
-and evidence is sufficient.
-Use JSON null for unavailable scores.
+Always assign numeric scores from 0 to 100 for professionalism_score, respectfulness_score, and politeness_score based on the agent's performance.
+Calculate total_score as the arithmetic mean of the three scores rounded to 1 decimal place.
+Extract explicit agent actions and client needs from the conversation.
 Include at most 5 client needs, 6 agent actions, and 6 evidence items.
 Keep each rationale and explanation to 1-2 sentences.
-Use exact transcript quotes only.
-Do not list unintelligible fragments or routine repeated thank-yous
-as agent actions unless relevant.
-A promise is not proof of completion.
 """.strip()
 
 # ==============================================================================

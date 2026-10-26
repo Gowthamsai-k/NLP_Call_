@@ -546,12 +546,45 @@ Return JSON only.
         client, notes = normalize_role(roles.get("client"), "Client")
         validation_notes.extend(notes)
 
-        if agent["speaker_id"] is not None and agent["speaker_id"] == client["speaker_id"]:
-            validation_notes.append(
-                "Agent and client had the same speaker ID; both roles were set to null."
-            )
-            agent["speaker_id"] = None
-            client["speaker_id"] = None
+        # Smart role disambiguation & recovery
+        valid_list = sorted(list(valid_speaker_ids))
+        if valid_list:
+            # If both assigned the same speaker, assign the other valid speaker to the client
+            if agent["speaker_id"] is not None and agent["speaker_id"] == client["speaker_id"]:
+                others = [s for s in valid_list if s != agent["speaker_id"]]
+                if others:
+                    client["speaker_id"] = others[0]
+                    client["evidence"] = "Inferred as caller/client from conversation turns"
+                    validation_notes.append(f"Disambiguated client role to {client['speaker_id']}.")
+            
+            # If one role is identified in a 2-speaker call, deduce the other
+            if len(valid_list) == 2:
+                s0, s1 = valid_list[0], valid_list[1]
+                if agent["speaker_id"] is None and client["speaker_id"] is not None:
+                    agent["speaker_id"] = s1 if client["speaker_id"] == s0 else s0
+                    agent["evidence"] = "Inferred as agent from conversational turns"
+                elif client["speaker_id"] is None and agent["speaker_id"] is not None:
+                    client["speaker_id"] = s1 if agent["speaker_id"] == s0 else s0
+                    client["evidence"] = "Inferred as caller from conversational turns"
+
+            # If agent is still null, inspect early turns for greetings/support keywords
+            if agent["speaker_id"] is None:
+                greetings = ["morning", "evening", "afternoon", "hello", "support", "help", "calling", "yes ma'am", "yes sir", "speaking", "here from"]
+                scores = {s: 0.0 for s in valid_list}
+                for seg in segments[:10]:
+                    t_lower = str(seg.get("text", "")).lower()
+                    spk = seg.get("speaker_id")
+                    if spk in scores:
+                        for g in greetings:
+                            if g in t_lower:
+                                scores[spk] += 2.0
+                        scores[spk] += len(t_lower.split()) * 0.05
+                best_spk = max(scores, key=scores.get) if scores else valid_list[0]
+                agent["speaker_id"] = best_spk
+                agent["evidence"] = "Inferred from opening greeting and support turns"
+                if client["speaker_id"] is None or client["speaker_id"] == agent["speaker_id"]:
+                    rem = [s for s in valid_list if s != agent["speaker_id"]]
+                    client["speaker_id"] = rem[0] if rem else None
 
         uncertainties = ensure_list(final_result.get("uncertainties"))
         uncertainties.extend(validation_notes)
