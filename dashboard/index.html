@@ -865,6 +865,138 @@
       border-top: 1px solid var(--slate-200);
       background: white;
     }
+
+    /* SLIDE-OVER SIDEBAR DRAWER */
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .sidebar-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .sidebar-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 620px;
+      max-width: 95vw;
+      background: white;
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.25);
+      z-index: 1001;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .sidebar-drawer.open {
+      transform: translateX(0);
+    }
+
+    .sidebar-header {
+      padding: 1.15rem 1.4rem;
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar-header-left {
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .sidebar-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: white;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-counter {
+      font-size: 0.78rem;
+      color: #c7d2fe;
+      margin-top: 0.15rem;
+    }
+
+    .sidebar-header-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .sidebar-nav-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: white;
+      padding: 0.35rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: background 0.15s ease;
+    }
+
+    .sidebar-nav-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .sidebar-nav-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .sidebar-close-btn {
+      background: transparent;
+      border: none;
+      color: #cbd5e1;
+      font-size: 1.3rem;
+      cursor: pointer;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      line-height: 1;
+      margin-left: 0.25rem;
+    }
+
+    .sidebar-close-btn:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .sidebar-body {
+      padding: 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+      background: var(--slate-50);
+    }
+
+    .sidebar-footer {
+      padding: 0.85rem 1.25rem;
+      background: white;
+      border-top: 1px solid var(--slate-200);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -1184,6 +1316,139 @@
   <footer>
     Customer Support Quality Pipeline &bull; Automated Scoring &bull; Only Score Deliverable Preserved
   </footer>
+
+  <!-- SLIDE-OVER SIDEBAR DRAWER & OVERLAY -->
+  <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <div id="sidebarDrawer" class="sidebar-drawer">
+    <!-- Sidebar Header -->
+    <div class="sidebar-header">
+      <div class="sidebar-header-left">
+        <div class="sidebar-title" id="sbFileName">Call Scorecard</div>
+        <div class="sidebar-counter" id="sbCallCounter">Call 1 of 1</div>
+      </div>
+      <div class="sidebar-header-nav">
+        <button id="sbPrevBtn" class="sidebar-nav-btn" onclick="prevCall()" title="Previous Call (Left Arrow)">
+          <span>⬅️ Prev</span>
+        </button>
+        <button id="sbNextBtn" class="sidebar-nav-btn" onclick="nextCall()" title="Next Call (Right Arrow)">
+          <span>Next ➡️</span>
+        </button>
+        <button class="sidebar-close-btn" onclick="closeSidebar()" title="Close (Esc)">✖</button>
+      </div>
+    </div>
+
+    <!-- Sidebar Body -->
+    <div class="sidebar-body">
+      <!-- Hero Scorecard in Sidebar -->
+      <div class="scorecard-hero" style="padding: 1.25rem; margin-bottom: 1.25rem; grid-template-columns: 130px 1fr; gap: 1.25rem;">
+        <div class="total-score-circle" id="sbScoreCircle" style="width: 110px; height: 110px; --score-pct: 85;">
+          <div class="total-score-inner" style="width: 88px; height: 88px;">
+            <span class="score-val" id="sbScoreVal" style="font-size: 1.7rem;">--</span>
+            <span class="score-max" style="font-size: 0.65rem;">OVERALL / 100</span>
+          </div>
+        </div>
+        <div class="hero-meta">
+          <div class="meta-tags" style="margin-top: 0; margin-bottom: 0.5rem;">
+            <span id="sbResolutionBadge" class="badge badge-resolved">Resolved</span>
+            <span id="sbIntentBadge" class="badge" style="background: rgba(255,255,255,0.15); color: white;">Intent</span>
+          </div>
+          <p id="sbExplanation" style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.4; margin-top: 0.25rem;">
+            Resolution explanation...
+          </p>
+        </div>
+      </div>
+
+      <!-- Subscores Grid in Sidebar -->
+      <div class="subscores-grid" style="grid-template-columns: 1fr; gap: 0.85rem; margin-bottom: 1.25rem;">
+        <!-- Professionalism -->
+        <div class="subscore-card" style="padding: 0.9rem;">
+          <div class="subscore-header" style="margin-bottom: 0.4rem;">
+            <span class="subscore-title" style="font-size: 0.85rem;">Professionalism</span>
+            <span class="subscore-number" id="sbProfVal" style="font-size: 1.15rem;">--</span>
+          </div>
+          <div class="score-bar" style="height: 6px; margin-bottom: 0.4rem;">
+            <div class="score-bar-inner" id="sbProfBar"></div>
+          </div>
+          <p class="subscore-rationale" id="sbProfRationale" style="font-size: 0.78rem;">Rationale...</p>
+        </div>
+
+        <!-- Respectfulness -->
+        <div class="subscore-card" style="padding: 0.9rem;">
+          <div class="subscore-header" style="margin-bottom: 0.4rem;">
+            <span class="subscore-title" style="font-size: 0.85rem;">Respectfulness</span>
+            <span class="subscore-number" id="sbRespVal" style="font-size: 1.15rem; color: var(--success);">--</span>
+          </div>
+          <div class="score-bar" style="height: 6px; margin-bottom: 0.4rem;">
+            <div class="score-bar-inner" id="sbRespBar" style="background: var(--success);"></div>
+          </div>
+          <p class="subscore-rationale" id="sbRespRationale" style="font-size: 0.78rem;">Rationale...</p>
+        </div>
+
+        <!-- Politeness -->
+        <div class="subscore-card" style="padding: 0.9rem;">
+          <div class="subscore-header" style="margin-bottom: 0.4rem;">
+            <span class="subscore-title" style="font-size: 0.85rem;">Politeness</span>
+            <span class="subscore-number" id="sbPolVal" style="font-size: 1.15rem; color: var(--info);">--</span>
+          </div>
+          <div class="score-bar" style="height: 6px; margin-bottom: 0.4rem;">
+            <div class="score-bar-inner" id="sbPolBar" style="background: var(--info);"></div>
+          </div>
+          <p class="subscore-rationale" id="sbPolRationale" style="font-size: 0.78rem;">Rationale...</p>
+        </div>
+      </div>
+
+      <!-- Client Needs & Agent Actions in Sidebar -->
+      <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.25rem;">
+        <div class="card" style="margin-bottom: 0;">
+          <div class="card-header" style="padding: 0.65rem 0.9rem;">
+            <h2 style="font-size: 0.9rem;">🎯 Client Needs</h2>
+          </div>
+          <div class="card-body" style="padding: 0.75rem 0.9rem;">
+            <ul class="item-list" id="sbClientNeedsList" style="font-size: 0.8rem;"></ul>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 0;">
+          <div class="card-header" style="padding: 0.65rem 0.9rem;">
+            <h2 style="font-size: 0.9rem;">🛠️ Agent Actions</h2>
+          </div>
+          <div class="card-body" style="padding: 0.75rem 0.9rem;">
+            <ul class="item-list" id="sbAgentActionsList" style="font-size: 0.8rem;"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evidence Quotes in Sidebar -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header" style="padding: 0.65rem 0.9rem;">
+          <h2 style="font-size: 0.9rem;">💬 Transcript Evidence (<span id="sbEvidenceCount">0</span> quotes)</h2>
+        </div>
+        <div class="card-body" style="padding: 0; overflow-x: auto;">
+          <table class="evidence-table" style="font-size: 0.76rem;">
+            <thead>
+              <tr>
+                <th style="width: 80px;">Time</th>
+                <th style="width: 75px;">Speaker</th>
+                <th>Quote Excerpt &amp; Notes</th>
+              </tr>
+            </thead>
+            <tbody id="sbEvidenceTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar Footer with Next button and Download -->
+    <div class="sidebar-footer">
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button id="sbFooterPrevBtn" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="prevCall()">⬅️ Prev</button>
+        <span id="sbFooterCounter" style="font-size: 0.8rem; color: var(--slate-600); font-weight: 600;">1 / 1</span>
+        <button id="sbFooterNextBtn" class="btn btn-primary" style="padding: 0.35rem 0.9rem; font-size: 0.8rem;" onclick="nextCall()">Next Call ➡️</button>
+      </div>
+      <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="downloadCurrentEvaluationJson()">💾 Download JSON</button>
+    </div>
+  </div>
 
   <script>
     // State
@@ -1596,8 +1861,11 @@
             badgeHtml = `<span class="tracker-file-badge tracker-badge-queued">⏳ Queued</span>`;
           }
 
+          const evalIdx = evaluations.findIndex(e => e.filename === file.filename || e.id === file.filename || (e.data && e.data.audio_file === file.filename));
+          const clickHandler = evalIdx >= 0 ? `onclick="selectCallFromTable(${evalIdx})" style="cursor: pointer;" title="Click to view scorecard in sidebar"` : '';
+
           return `
-            <div class="${rowClass}">
+            <div class="${rowClass}" ${clickHandler}>
               <div class="tracker-file-info">
                 <span>🎵</span>
                 <span>${escapeHtml(file.filename)}</span>
@@ -1664,13 +1932,9 @@
       }).join('');
     }
 
-    function onCallDropdownSelected(idx) {
-      selectedCallIndex = parseInt(idx, 10);
-      renderSingleScorecard(evaluations[selectedCallIndex]);
-    }
-
     function populateSummaryTable() {
       const tbody = document.getElementById('summaryTableRows');
+      if (!tbody) return;
       document.getElementById('summaryTotalCount').textContent = evaluations.length;
 
       tbody.innerHTML = evaluations.map((item, idx) => {
@@ -1683,14 +1947,14 @@
         const fname = item.filename || item.data?.audio_file || ('Call #' + (idx + 1));
 
         return `
-          <tr onclick="selectCallFromTable(${idx})">
+          <tr onclick="selectCallFromTable(${idx})" style="cursor: pointer;" title="Click to open scorecard sidebar">
             <td><strong>${fname}</strong></td>
             <td><span style="font-weight: 700; color: var(--primary);">${total}</span></td>
             <td>${prof}</td>
             <td>${resp}</td>
             <td>${pol}</td>
             <td><span class="badge badge-${res}">${res}</span></td>
-            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">View</button></td>
+            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCallFromTable(${idx})">Inspect 🔍</button></td>
           </tr>
         `;
       }).join('');
@@ -1698,9 +1962,180 @@
 
     function selectCallFromTable(idx) {
       selectedCallIndex = idx;
-      document.getElementById('callDropdown').value = idx;
+      const dd = document.getElementById('callDropdown');
+      if (dd) dd.value = idx;
       renderSingleScorecard(evaluations[selectedCallIndex]);
-      window.scrollTo({ top: document.getElementById('resultsArea').offsetTop - 30, behavior: 'smooth' });
+      openSidebar(idx);
+    }
+
+    function onCallDropdownSelected(idx) {
+      selectedCallIndex = parseInt(idx, 10);
+      renderSingleScorecard(evaluations[selectedCallIndex]);
+      openSidebar(selectedCallIndex);
+    }
+
+    // SIDEBAR DRAWER CONTROLS
+    function openSidebar(idx) {
+      if (!evaluations || evaluations.length === 0) return;
+      selectedCallIndex = Math.max(0, Math.min(evaluations.length - 1, idx));
+      
+      const drawer = document.getElementById('sidebarDrawer');
+      const overlay = document.getElementById('sidebarOverlay');
+      if (drawer) drawer.classList.add('open');
+      if (overlay) overlay.classList.add('active');
+
+      renderSidebarContent(evaluations[selectedCallIndex]);
+      updateSidebarNavButtons();
+
+      const dd = document.getElementById('callDropdown');
+      if (dd) dd.value = selectedCallIndex;
+    }
+
+    function closeSidebar() {
+      const drawer = document.getElementById('sidebarDrawer');
+      const overlay = document.getElementById('sidebarOverlay');
+      if (drawer) drawer.classList.remove('open');
+      if (overlay) overlay.classList.remove('active');
+    }
+
+    function nextCall() {
+      if (!evaluations || evaluations.length === 0) return;
+      if (selectedCallIndex < evaluations.length - 1) {
+        selectedCallIndex++;
+        renderSidebarContent(evaluations[selectedCallIndex]);
+        renderSingleScorecard(evaluations[selectedCallIndex]);
+        updateSidebarNavButtons();
+        const dd = document.getElementById('callDropdown');
+        if (dd) dd.value = selectedCallIndex;
+      }
+    }
+
+    function prevCall() {
+      if (!evaluations || evaluations.length === 0) return;
+      if (selectedCallIndex > 0) {
+        selectedCallIndex--;
+        renderSidebarContent(evaluations[selectedCallIndex]);
+        renderSingleScorecard(evaluations[selectedCallIndex]);
+        updateSidebarNavButtons();
+        const dd = document.getElementById('callDropdown');
+        if (dd) dd.value = selectedCallIndex;
+      }
+    }
+
+    function updateSidebarNavButtons() {
+      const total = evaluations.length;
+      const cur = selectedCallIndex + 1;
+      const text = `Call ${cur} of ${total}`;
+      const footerText = `${cur} / ${total}`;
+
+      const counter = document.getElementById('sbCallCounter');
+      const footerCounter = document.getElementById('sbFooterCounter');
+      if (counter) counter.textContent = text;
+      if (footerCounter) footerCounter.textContent = footerText;
+
+      const prevBtn = document.getElementById('sbPrevBtn');
+      const nextBtn = document.getElementById('sbNextBtn');
+      const fPrevBtn = document.getElementById('sbFooterPrevBtn');
+      const fNextBtn = document.getElementById('sbFooterNextBtn');
+
+      const isFirst = selectedCallIndex <= 0;
+      const isLast = selectedCallIndex >= total - 1;
+
+      if (prevBtn) prevBtn.disabled = isFirst;
+      if (fPrevBtn) fPrevBtn.disabled = isFirst;
+      if (nextBtn) nextBtn.disabled = isLast;
+      if (fNextBtn) fNextBtn.disabled = isLast;
+    }
+
+    // Keyboard listener for Sidebar (Escape, ArrowLeft, ArrowRight)
+    document.addEventListener('keydown', (e) => {
+      const drawer = document.getElementById('sidebarDrawer');
+      if (!drawer || !drawer.classList.contains('open')) return;
+
+      if (e.key === 'Escape') {
+        closeSidebar();
+      } else if (e.key === 'ArrowRight') {
+        nextCall();
+      } else if (e.key === 'ArrowLeft') {
+        prevCall();
+      }
+    });
+
+    function renderSidebarContent(evalObj) {
+      if (!evalObj || !evalObj.data) return;
+      const d = evalObj.data;
+      const sc = d.scorecard || {};
+
+      const fname = evalObj.filename || d.audio_file || 'Call Scorecard';
+      document.getElementById('sbFileName').textContent = fname;
+
+      // Overall Score
+      const totalScore = sc.total_score != null ? Number(sc.total_score).toFixed(1) : 'N/A';
+      document.getElementById('sbScoreVal').textContent = totalScore;
+      const pct = sc.total_score != null ? Math.min(100, Math.max(0, sc.total_score)) : 0;
+      document.getElementById('sbScoreCircle').style.setProperty('--score-pct', pct);
+
+      document.getElementById('sbExplanation').textContent = d.resolution?.explanation || 'No resolution explanation provided.';
+
+      // Badges
+      const resStatus = d.resolution?.status || 'unclear';
+      const badge = document.getElementById('sbResolutionBadge');
+      badge.className = 'badge badge-' + resStatus;
+      badge.textContent = 'Status: ' + resStatus.replace('_', ' ');
+
+      document.getElementById('sbIntentBadge').textContent = 'Intent: ' + (d.intent_review || 'reviewed');
+      const evidenceCount = Array.isArray(sc.evidence) ? sc.evidence.length : 0;
+      document.getElementById('sbEvidenceCount').textContent = evidenceCount;
+
+      // Subscores
+      setSidebarSubscore('sbProfVal', 'sbProfBar', 'sbProfRationale', sc.professionalism_score, sc.professionalism_rationale);
+      setSidebarSubscore('sbRespVal', 'sbRespBar', 'sbRespRationale', sc.respectfulness_score, sc.respectfulness_rationale);
+      setSidebarSubscore('sbPolVal', 'sbPolBar', 'sbPolRationale', sc.politeness_score, sc.politeness_rationale);
+
+      // Client Needs
+      const needsUl = document.getElementById('sbClientNeedsList');
+      if (Array.isArray(d.client_needs) && d.client_needs.length > 0) {
+        needsUl.innerHTML = d.client_needs.map(n => `<li>${escapeHtml(n)}</li>`).join('');
+      } else {
+        needsUl.innerHTML = '<li style="color: var(--slate-400);">No specific client needs recorded.</li>';
+      }
+
+      // Agent Actions
+      const actionsUl = document.getElementById('sbAgentActionsList');
+      if (Array.isArray(d.agent_actions) && d.agent_actions.length > 0) {
+        actionsUl.innerHTML = d.agent_actions.map(a => `<li>${escapeHtml(a)}</li>`).join('');
+      } else {
+        actionsUl.innerHTML = '<li style="color: var(--slate-400);">No specific agent actions recorded.</li>';
+      }
+
+      // Evidence Table
+      const evTbody = document.getElementById('sbEvidenceTableBody');
+      if (Array.isArray(sc.evidence) && sc.evidence.length > 0) {
+        evTbody.innerHTML = sc.evidence.map(ev => `
+          <tr>
+            <td><span class="timestamp-badge">${escapeHtml(ev.timestamp || '-')}</span></td>
+            <td><span class="speaker-badge">${escapeHtml(ev.speaker_id || '-')}</span></td>
+            <td>
+              <div style="font-weight: 600; text-transform: capitalize; color: var(--primary); margin-bottom: 2px;">${escapeHtml(ev.category || '')}</div>
+              <div class="quote-text">"${escapeHtml(ev.quote || '')}"</div>
+              ${ev.interpretation ? `<div style="color: var(--slate-500); font-size: 0.72rem; margin-top: 2px;">Note: ${escapeHtml(ev.interpretation)}</div>` : ''}
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        evTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--slate-400); padding: 1rem;">No direct quote evidence recorded.</td></tr>`;
+      }
+    }
+
+    function setSidebarSubscore(valId, barId, ratId, score, rationale) {
+      const valEl = document.getElementById(valId);
+      const barEl = document.getElementById(barId);
+      const ratEl = document.getElementById(ratId);
+
+      const num = score != null ? Number(score).toFixed(1) : 'N/A';
+      valEl.textContent = num;
+      barEl.style.width = (score != null ? Math.min(100, Math.max(0, score)) : 0) + '%';
+      ratEl.textContent = rationale || 'No rationale available.';
     }
 
     function toggleSummaryTable() {
