@@ -44,7 +44,6 @@ def empty_evaluation() -> Dict[str, Any]:
             "agent_name_stated": None,
             "company_named": False,
             "greeting_quote": None,
-            "first_five_turns": [],
             "notes": "No formal introduction greeting identified.",
         },
         "intent_review": "",
@@ -773,32 +772,16 @@ RULES:
             final_status = "non_compliant"
             final_comp = False
 
-        # Extract opening five conversation turns for audit evidence when intro is missing or partial
-        first_five_turns = []
-        for idx, s in enumerate(segments[:5], start=1):
-            spk = str(s.get("speaker_id") or f"Speaker_{idx}")
-            role = "Support Executive" if (agent_id and spk == agent_id) else ("Customer" if (client_id and spk == client_id) else spk)
-            txt = str(s.get("text") or "").strip()
-            first_five_turns.append({
-                "turn": idx,
-                "speaker": role,
-                "speaker_id": spk,
-                "start": round(float(s.get("start", 0.0)), 2),
-                "end": round(float(s.get("end", 0.0)), 2),
-                "text": txt,
-            })
-
         evaluation_obj["introduction_check"] = {
             "status": final_status,
             "compliant": final_comp,
             "agent_name_stated": final_name,
             "company_named": final_company,
             "greeting_quote": final_quote[:300] if final_quote else None,
-            "first_five_turns": first_five_turns if not final_comp else None,
             "notes": (
                 "Agent stated name and company affiliation." if final_status == "compliant"
-                else ("Partial introduction identified. First 5 conversation turns provided as evidence." if final_status == "partially_compliant"
-                else "No formal Next Education introduction identified. First 5 conversation turns provided as evidence.")
+                else ("Partial introduction identified." if final_status == "partially_compliant"
+                else "No formal Next Education introduction identified.")
             ),
         }
 

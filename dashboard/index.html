@@ -1261,7 +1261,6 @@
                 <span id="metaIntroBadge" class="badge badge-resolved">Compliant</span>
               </div>
               <div id="metaIntroQuote" style="font-size: 0.85rem; color: var(--slate-700); font-style: italic;">--</div>
-              <div id="metaIntroEvidenceBox" style="margin-top: 0.65rem; display: none;"></div>
             </div>
           </div>
         </div>
@@ -1493,7 +1492,6 @@
             <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Languages:</span><span id="sbLangBreakdownVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
             <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.35rem; border-top: 1px dashed var(--slate-200);"><span style="color: var(--slate-500);">Intro Protocol:</span><span id="sbIntroBadge" class="badge badge-resolved" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">Compliant</span></div>
             <div id="sbIntroQuote" style="font-size: 0.78rem; color: var(--slate-600); font-style: italic;">--</div>
-            <div id="sbIntroEvidenceBox" style="margin-top: 0.5rem; display: none;"></div>
           </div>
         </div>
       </div>
@@ -2466,40 +2464,6 @@
       introBadge.textContent = isIntroComp ? 'Compliant' : (introStatus === 'partially_compliant' ? 'Partial' : 'Missing Intro');
       document.getElementById('sbIntroQuote').textContent = introData.greeting_quote ? `"${introData.greeting_quote}"` : (introData.notes || 'No standard introduction spoken.');
 
-      const sbEvidenceBox = document.getElementById('sbIntroEvidenceBox');
-      if (sbEvidenceBox) {
-        if (!isIntroComp) {
-          const turns = getOpeningTurnsEvidence(d, introData);
-          if (turns.length > 0) {
-            sbEvidenceBox.style.display = 'block';
-            sbEvidenceBox.innerHTML = `
-              <div style="background: var(--slate-100); border: 1px solid var(--slate-200); border-radius: 4px; padding: 0.5rem 0.65rem;">
-                <div style="font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: var(--slate-500); margin-bottom: 0.35rem;">
-                  Opening 5 Turns (Evidence):
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 0.35rem;">
-                  ${turns.map(t => {
-                    const isAgent = (t.speaker || '').toLowerCase().includes('agent') || (t.speaker || '').toLowerCase().includes('executive');
-                    const spkColor = isAgent ? 'var(--primary)' : '#0284c7';
-                    const timeStr = (t.start != null && t.end != null) ? ` (${formatClock(t.start)} - ${formatClock(t.end)})` : '';
-                    return `
-                      <div style="font-size: 0.74rem; line-height: 1.35; padding: 0.2rem 0.35rem; background: white; border-radius: 3px; border-left: 2px solid ${spkColor};">
-                        <strong style="color: ${spkColor};">Turn ${t.turn}: ${escapeHtml(t.speaker)}</strong><span style="color: var(--slate-400); font-size: 0.68rem;">${timeStr}</span>
-                        <div style="color: var(--slate-700); font-style: italic;">"${escapeHtml(t.text || '(Silence or unintelligible greeting)')}"</div>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-            `;
-          } else {
-            sbEvidenceBox.style.display = 'none';
-          }
-        } else {
-          sbEvidenceBox.style.display = 'none';
-        }
-      }
-
       // Subscores
       setSidebarSubscore('sbProfVal', 'sbProfBar', 'sbProfRationale', sc.professionalism_score, sc.professionalism_rationale);
       setSidebarSubscore('sbRespVal', 'sbRespBar', 'sbRespRationale', sc.respectfulness_score, sc.respectfulness_rationale);
@@ -2546,24 +2510,6 @@
         body.style.display = 'none';
         icon.textContent = '[Show Table]';
       }
-    }
-
-    function getOpeningTurnsEvidence(d, introData) {
-      if (Array.isArray(introData?.first_five_turns) && introData.first_five_turns.length > 0) {
-        return introData.first_five_turns.slice(0, 5);
-      }
-      const dtTurns = d?.diarization_timeline?.turns || [];
-      if (dtTurns.length > 0) {
-        return dtTurns.slice(0, 5).map((t, idx) => ({
-          turn: idx + 1,
-          speaker: t.role === 'agent' ? 'Support Executive' : 'Customer',
-          speaker_id: t.speaker_id || '',
-          start: t.start,
-          end: t.end,
-          text: t.text || `Audio turn segment ${formatClock(t.start)} - ${formatClock(t.end)}`
-        }));
-      }
-      return [];
     }
 
     // Parse structured metadata from audio filename (Next Education naming standard)
@@ -2688,46 +2634,6 @@
       introBadge.className = 'badge ' + (isIntroComp ? 'badge-resolved' : (introStatus === 'partially_compliant' ? 'badge-partially_resolved' : 'badge-unresolved'));
       introBadge.textContent = isIntroComp ? 'Compliant' : (introStatus === 'partially_compliant' ? 'Partial Intro' : 'Missing Intro');
       document.getElementById('metaIntroQuote').textContent = introData.greeting_quote ? `"${introData.greeting_quote}"` : (introData.notes || 'No standard introduction spoken.');
-
-      const metaEvidenceBox = document.getElementById('metaIntroEvidenceBox');
-      if (metaEvidenceBox) {
-        if (!isIntroComp) {
-          const turns = getOpeningTurnsEvidence(d, introData);
-          if (turns.length > 0) {
-            metaEvidenceBox.style.display = 'block';
-            metaEvidenceBox.innerHTML = `
-              <div style="background: white; border: 1px solid var(--slate-300); border-radius: 6px; padding: 0.75rem 0.9rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
-                  <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--slate-600); letter-spacing: 0.04em;">Opening 5 Conversation Turns (Protocol Evidence)</span>
-                  <span style="font-size: 0.7rem; font-weight: 600; color: #b91c1c;">Next Education Intro Absent</span>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 0.45rem;">
-                  ${turns.map(t => {
-                    const isAgent = (t.speaker || '').toLowerCase().includes('agent') || (t.speaker || '').toLowerCase().includes('executive');
-                    const spkColor = isAgent ? 'var(--primary)' : '#0284c7';
-                    const timeStr = (t.start != null && t.end != null) ? ` [${formatClock(t.start)} - ${formatClock(t.end)}]` : '';
-                    return `
-                      <div style="padding: 0.35rem 0.55rem; background: var(--slate-50); border-radius: 4px; font-size: 0.8rem; border-left: 3px solid ${spkColor};">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.72rem; margin-bottom: 0.15rem;">
-                          <strong style="color: ${spkColor};">Turn ${t.turn}: ${escapeHtml(t.speaker)}</strong>
-                          <span style="font-family: monospace; color: var(--slate-500);">${timeStr}</span>
-                        </div>
-                        <div style="color: var(--slate-800); font-style: italic;">
-                          "${escapeHtml(t.text || '(Silence or unintelligible greeting)')}"
-                        </div>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-            `;
-          } else {
-            metaEvidenceBox.style.display = 'none';
-          }
-        } else {
-          metaEvidenceBox.style.display = 'none';
-        }
-      }
 
       // 5. Resolution Outcome & Action Tracker Card Population
       const trackerBadge = document.getElementById('trackerResolutionBadge');

@@ -192,58 +192,6 @@ def find_existing_evaluations(output_dir: Path):
                 except Exception:
                     pass
 
-            # Ensure first_five_turns evidence is present if intro is missing or non-compliant
-            intro = data.get("introduction_check")
-            if isinstance(intro, dict) and not intro.get("compliant") and not intro.get("first_five_turns"):
-                trans_p = eval_path.parent / "call_transcript_with_speakers.json"
-                meta_p = eval_path.parent / "call_metadata.json"
-                segs = []
-                if trans_p.exists():
-                    try:
-                        with trans_p.open("r", encoding="utf-8") as tf:
-                            segs = json.load(tf) or []
-                    except Exception:
-                        pass
-                if not segs and meta_p.exists():
-                    try:
-                        with meta_p.open("r", encoding="utf-8") as mf:
-                            m_obj = json.load(mf)
-                            segs = m_obj.get("segments") or []
-                    except Exception:
-                        pass
-                if segs:
-                    agent_id = None
-                    client_id = None
-                    intent_p = eval_path.parent / "intent_extraction.json"
-                    if intent_p.exists():
-                        try:
-                            with intent_p.open("r", encoding="utf-8") as inf:
-                                in_obj = json.load(inf)
-                                roles = in_obj.get("speaker_roles", {})
-                                agent_id = roles.get("agent", {}).get("speaker_id")
-                                client_id = roles.get("client", {}).get("speaker_id")
-                        except Exception:
-                            pass
-                    turns_5 = []
-                    for idx, s in enumerate(segs[:5], start=1):
-                        spk = str(s.get("speaker_id") or f"Speaker_{idx}")
-                        role = "Support Executive" if (agent_id and spk == agent_id) else ("Customer" if (client_id and spk == client_id) else spk)
-                        txt = str(s.get("text") or "").strip()
-                        turns_5.append({
-                            "turn": idx,
-                            "speaker": role,
-                            "speaker_id": spk,
-                            "start": round(float(s.get("start", 0.0)), 2),
-                            "end": round(float(s.get("end", 0.0)), 2),
-                            "text": txt,
-                        })
-                    intro["first_five_turns"] = turns_5
-                    try:
-                        with eval_path.open("w", encoding="utf-8") as wf:
-                            json.dump(data, wf, ensure_ascii=False, indent=2)
-                    except Exception:
-                        pass
-
             evaluations.append({
                 "id": str(eval_path.parent.name),
                 "filename": call_name,
@@ -464,8 +412,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
 
         elif path == "/api/results":
-            output_dir = PROJECT_ROOT / "output"
-            evals = find_existing_evaluations(output_dir)
+            out_p = PROJECT_ROOT / "Output" if (PROJECT_ROOT / "Output").exists() else (PROJECT_ROOT / "output")
+            evals = find_existing_evaluations(out_p)
             self.send_json_response(evals)
             return
 
