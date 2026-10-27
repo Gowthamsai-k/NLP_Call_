@@ -36,6 +36,7 @@ logger = logging.getLogger("dashboard_server")
 
 from src.customer_support_pipeline.storage.database import (
     query_evaluations_from_db,
+    get_filter_options_from_db,
     sync_disk_evaluations_to_db,
     DEFAULT_DB_FILENAME,
 )
@@ -417,6 +418,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json_response({"error": f"Job {job_id} not found"}, status=404)
             return
 
+        elif path == "/api/filters" or path.startswith("/api/filters"):
+            out_p = PROJECT_ROOT / "Output" if (PROJECT_ROOT / "Output").exists() else (PROJECT_ROOT / "output")
+            db_path = out_p / DEFAULT_DB_FILENAME
+            if not db_path.exists():
+                sync_disk_evaluations_to_db(out_p, db_path)
+            filters = get_filter_options_from_db(db_path)
+            self.send_json_response(filters)
+            return
+
         elif path == "/api/results" or path.startswith("/api/results"):
             out_p = PROJECT_ROOT / "Output" if (PROJECT_ROOT / "Output").exists() else (PROJECT_ROOT / "output")
             db_path = out_p / DEFAULT_DB_FILENAME
@@ -426,33 +436,73 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             agent_filter = query_params.get("agent", [None])[0]
             res_filter = query_params.get("resolution", [None])[0]
             lang_filter = query_params.get("language", [None])[0]
+            search_query = query_params.get("search", [None])[0]
+            all_flag = query_params.get("all", ["0"])[0].lower() in ("1", "true", "yes")
+
             try:
-                limit_val = int(query_params.get("limit", [5000])[0])
+                page_val = max(1, int(query_params.get("page", [1])[0]))
             except (ValueError, TypeError):
-                limit_val = 5000
+                page_val = 1
+
             try:
-                offset_val = int(query_params.get("offset", [0])[0])
+                page_size_val = max(1, int(query_params.get("page_size", [query_params.get("limit", [10])[0]])[0]))
             except (ValueError, TypeError):
-                offset_val = 0
+                page_size_val = 10
+
+            offset_val = (page_val - 1) * page_size_val
 
             # If database does not exist yet, sync existing evaluations from disk
             if not db_path.exists():
                 sync_disk_evaluations_to_db(out_p, db_path)
 
-            evals = query_evaluations_from_db(
+            if all_flag:
+                evals, total_count = query_evaluations_from_db(
+                    db_path,
+                    limit=50000,
+                    offset=0,
+                    agent=agent_filter,
+                    resolution=res_filter,
+                    dominant_language=lang_filter,
+                    search=search_query,
+                )
+                if not evals:
+                    evals = find_existing_evaluations(out_p)
+                self.send_json_response(evals)
+                return
+
+            evals, total_count = query_evaluations_from_db(
                 db_path,
-                limit=limit_val,
+                limit=page_size_val,
                 offset=offset_val,
                 agent=agent_filter,
                 resolution=res_filter,
                 dominant_language=lang_filter,
+                search=search_query,
             )
 
             # Fallback if SQLite returned nothing but disk has files
-            if not evals:
-                evals = find_existing_evaluations(out_p)
+            if not evals and total_count == 0:
+                fallback_items = find_existing_evaluations(out_p)
+                if fallback_items:
+                    sync_disk_evaluations_to_db(out_p, db_path)
+                    evals, total_count = query_evaluations_from_db(
+                        db_path,
+                        limit=page_size_val,
+                        offset=offset_val,
+                        agent=agent_filter,
+                        resolution=res_filter,
+                        dominant_language=lang_filter,
+                        search=search_query,
+                    )
 
-            self.send_json_response(evals)
+            total_pages = max(1, (total_count + page_size_val - 1) // page_size_val) if total_count > 0 else 1
+            self.send_json_response({
+                "total": total_count,
+                "page": page_val,
+                "page_size": page_size_val,
+                "total_pages": total_pages,
+                "items": evals,
+            })
             return
 
         super().do_GET()

@@ -143,15 +143,16 @@ def save_evaluation_to_db(db_path: Path, eval_id: str, filename: str, data: Dict
 
 def query_evaluations_from_db(
     db_path: Path,
-    limit: int = 1000,
+    limit: int = 10,
     offset: int = 0,
     agent: Optional[str] = None,
     resolution: Optional[str] = None,
     dominant_language: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """Queries call evaluation records with pagination and indexed filters."""
+    search: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Queries call evaluation records with pagination and indexed filters. Returns (items, total_count)."""
     if not db_path.exists():
-        return []
+        return [], 0
 
     conditions = []
     params: List[Any] = []
@@ -168,19 +169,27 @@ def query_evaluations_from_db(
         conditions.append("dominant_language = ?")
         params.append(dominant_language)
 
+    if search and search.strip():
+        term = f"%{search.strip().lower()}%"
+        conditions.append("(LOWER(filename) LIKE ? OR LOWER(agent) LIKE ? OR LOWER(customer_phone) LIKE ?)")
+        params.extend([term, term, term])
+
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    query = f"""
-        SELECT id, filename, data_json
-        FROM evaluations
-        {where_clause}
-        ORDER BY created_at DESC
-        LIMIT ? OFFSET ?;
-    """
-    params.extend([limit, offset])
 
     results = []
+    total_count = 0
     with get_db_connection(db_path) as conn:
-        cursor = conn.execute(query, params)
+        count_cursor = conn.execute(f"SELECT COUNT(*) FROM evaluations {where_clause};", params)
+        total_count = count_cursor.fetchone()[0]
+
+        query = f"""
+            SELECT id, filename, data_json
+            FROM evaluations
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?;
+        """
+        cursor = conn.execute(query, params + [limit, offset])
         for row in cursor.fetchall():
             try:
                 data = json.loads(row["data_json"])
@@ -192,7 +201,35 @@ def query_evaluations_from_db(
             except Exception:
                 continue
 
-    return results
+    return results, total_count
+
+
+def get_filter_options_from_db(db_path: Path) -> Dict[str, List[str]]:
+    """Returns distinct agents, resolutions, and languages for quick filter dropdown population."""
+    if not db_path.exists():
+        return {"agents": [], "resolutions": [], "languages": []}
+
+    with get_db_connection(db_path) as conn:
+        agents = [
+            row[0] for row in conn.execute(
+                "SELECT DISTINCT agent FROM evaluations WHERE agent IS NOT NULL AND agent != '' ORDER BY agent ASC;"
+            ).fetchall()
+        ]
+        resolutions = [
+            row[0] for row in conn.execute(
+                "SELECT DISTINCT resolution_status FROM evaluations WHERE resolution_status IS NOT NULL AND resolution_status != '' ORDER BY resolution_status ASC;"
+            ).fetchall()
+        ]
+        languages = [
+            row[0] for row in conn.execute(
+                "SELECT DISTINCT dominant_language FROM evaluations WHERE dominant_language IS NOT NULL AND dominant_language != '' ORDER BY dominant_language ASC;"
+            ).fetchall()
+        ]
+    return {
+        "agents": agents,
+        "resolutions": resolutions,
+        "languages": languages,
+    }
 
 
 def sync_disk_evaluations_to_db(output_dir: Path, db_path: Path) -> int:

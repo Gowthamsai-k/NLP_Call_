@@ -1150,7 +1150,7 @@
             <!-- Filter by Resolution Status -->
             <div style="display: flex; align-items: center; gap: 0.35rem;">
               <label for="filterResolution" style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Resolution:</label>
-              <select id="filterResolution" onchange="applyCallFilters()" style="font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none;">
+              <select id="filterResolution" onchange="goToPage(1)" style="font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none;">
                 <option value="all">All Resolutions</option>
                 <option value="resolved">Resolved</option>
                 <option value="partially_resolved">Partially Resolved</option>
@@ -1163,14 +1163,14 @@
             <!-- Filter by Executive Name -->
             <div style="display: flex; align-items: center; gap: 0.35rem;">
               <label for="filterAgent" style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Executive:</label>
-              <select id="filterAgent" onchange="applyCallFilters()" style="font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none; max-width: 220px;">
+              <select id="filterAgent" onchange="goToPage(1)" style="font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none; max-width: 220px;">
                 <option value="all">All Support Executives</option>
               </select>
             </div>
 
             <!-- Text Search Filter -->
             <div style="display: flex; align-items: center; gap: 0.35rem; flex: 1; min-width: 170px; max-width: 280px;">
-              <input type="text" id="filterSearch" placeholder="Search file, agent, phone..." oninput="applyCallFilters()" style="width: 100%; font-size: 0.8rem; padding: 0.3rem 0.55rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none;">
+              <input type="text" id="filterSearch" placeholder="Search file, agent, phone..." oninput="onSearchInputChanged()" style="width: 100%; font-size: 0.8rem; padding: 0.3rem 0.55rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none;">
             </div>
 
             <!-- Reset Filter Button -->
@@ -1202,6 +1202,29 @@
             <!-- Dynamic rows -->
           </tbody>
         </table>
+
+        <!-- Responsive Pagination Controls -->
+        <div id="tablePaginationToolbar" style="padding: 0.75rem 1rem; background: var(--slate-50); border-top: 1px solid var(--slate-200); display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--slate-600);">
+            <span>Rows per page:</span>
+            <select id="paginationPageSize" onchange="changePageSize(this.value)" style="padding: 0.25rem 0.5rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; font-size: 0.8rem; outline: none; cursor: pointer;">
+              <option value="10" selected>10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span id="paginationInfo" style="margin-left: 0.5rem; font-weight: 500;">Showing 0 calls</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.35rem;">
+            <button type="button" id="btnFirstPage" class="btn btn-secondary" onclick="goToPage(1)" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">&laquo; First</button>
+            <button type="button" id="btnPrevPage" class="btn btn-secondary" onclick="goToPage(currentPage - 1)" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">&lsaquo; Prev</button>
+            <span style="font-size: 0.8rem; font-weight: 600; padding: 0 0.5rem; color: var(--slate-700);">
+              Page <span id="paginationCurrentPage">1</span> of <span id="paginationTotalPages">1</span>
+            </span>
+            <button type="button" id="btnNextPage" class="btn btn-secondary" onclick="goToPage(currentPage + 1)" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Next &rsaquo;</button>
+            <button type="button" id="btnLastPage" class="btn btn-secondary" onclick="goToPage(totalPages)" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Last &raquo;</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1736,23 +1759,8 @@
     };
 
     function fetchExistingResults() {
-      fetch('/api/results')
-        .then(res => res.json())
-        .then(items => {
-          if (Array.isArray(items) && items.length > 0) {
-            evaluations = items;
-          } else if (evaluations.length === 0) {
-            // Load preview sample so details and scores are visible immediately
-            evaluations = [defaultSampleEvaluation];
-          }
-          renderEvaluations();
-        })
-        .catch(() => {
-          if (evaluations.length === 0) {
-            evaluations = [defaultSampleEvaluation];
-            renderEvaluations();
-          }
-        });
+      populateAgentFilterOptions();
+      fetchPaginatedResults(1);
     }
 
     // Tabs
@@ -2155,114 +2163,152 @@
 
     
 
-    // MAIN RENDER FUNCTION
-    function renderEvaluations() {
-      const emptyState = document.getElementById('emptyState');
-      const resultsArea = document.getElementById('resultsArea');
-      const summaryCard = document.getElementById('summaryCard');
+    // PAGINATION & SERVER-SIDE FILTER STATE
+    let currentPage = 1;
+    let pageSize = 10;
+    let totalCalls = 0;
+    let totalPages = 1;
+    let currentPageItems = [];
+    let searchDebounceTimer = null;
 
-      if (!evaluations || evaluations.length === 0) {
-        emptyState.style.display = 'block';
-        resultsArea.style.display = 'none';
-        if (summaryCard) summaryCard.style.display = 'none';
-        return;
-      }
-
-      emptyState.style.display = 'none';
-      resultsArea.style.display = 'block';
-
-      // Always populate and show summary overview table with dynamic filters
-      if (summaryCard) {
-        summaryCard.style.display = 'block';
-        populateAgentFilterOptions();
-        applyCallFilters();
-      }
-
-      // Render the currently selected call in BOTH main scorecard and side dashboard drawer
-      if (selectedCallIndex >= evaluations.length) {
-        selectedCallIndex = 0;
-      }
-      renderSingleScorecard(evaluations[selectedCallIndex]);
-      renderSidebarContent(evaluations[selectedCallIndex]);
-      updateSidebarNavButtons();
-    }
-
-    // Dynamic Filter Functions for Overview Table
+    // Populates Executive filter dropdown from SQLite distinct list
     function populateAgentFilterOptions() {
-      const select = document.getElementById('filterAgent');
-      if (!select) return;
-      const prevVal = select.value || 'all';
-
-      const agentSet = new Set();
-      evaluations.forEach(item => {
-        const meta = parseCallMetadata(item.filename || item.data?.audio_file);
-        if (meta && meta.agent) {
-          agentSet.add(meta.agent);
-        }
-      });
-
-      const agents = Array.from(agentSet).sort();
-      let html = '<option value="all">All Support Executives</option>';
-      agents.forEach(ag => {
-        html += `<option value="${escapeHtml(ag)}">${escapeHtml(ag)}</option>`;
-      });
-      select.innerHTML = html;
-      if (agents.includes(prevVal)) {
-        select.value = prevVal;
-      } else {
-        select.value = 'all';
-      }
+      fetch('/api/filters')
+        .then(res => res.json())
+        .then(data => {
+          const select = document.getElementById('filterAgent');
+          if (!select || !data || !Array.isArray(data.agents)) return;
+          const prevVal = select.value || 'all';
+          let html = '<option value="all">All Support Executives</option>';
+          data.agents.forEach(ag => {
+            html += `<option value="${escapeHtml(ag)}">${escapeHtml(ag)}</option>`;
+          });
+          select.innerHTML = html;
+          if (data.agents.includes(prevVal)) {
+            select.value = prevVal;
+          } else {
+            select.value = 'all';
+          }
+        })
+        .catch(() => {});
     }
 
-    function applyCallFilters() {
+    function onSearchInputChanged() {
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        goToPage(1);
+      }, 250);
+    }
+
+    function changePageSize(val) {
+      pageSize = parseInt(val, 10) || 10;
+      goToPage(1);
+    }
+
+    function goToPage(page) {
+      if (page < 1) page = 1;
+      if (totalPages > 0 && page > totalPages) page = totalPages;
+      fetchPaginatedResults(page);
+    }
+
+    // MAIN SERVER-SIDE PAGINATED FETCH FUNCTION
+    function fetchPaginatedResults(page = 1) {
+      currentPage = Math.max(1, page);
       const resSelect = document.getElementById('filterResolution');
       const agentSelect = document.getElementById('filterAgent');
       const searchInput = document.getElementById('filterSearch');
+
+      const resVal = resSelect ? resSelect.value : 'all';
+      const agentVal = agentSelect ? agentSelect.value : 'all';
+      const searchVal = searchInput ? searchInput.value.trim() : '';
+
+      const isFiltered = (resVal !== 'all' || agentVal !== 'all' || searchVal !== '');
       const resetBtn = document.getElementById('resetFiltersBtn');
+      if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-block' : 'none';
+
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        page_size: String(pageSize),
+        resolution: resVal,
+        agent: agentVal,
+        search: searchVal
+      });
+
+      fetch('/api/results?' + params.toString())
+        .then(res => res.json())
+        .then(data => {
+          if (data && typeof data === 'object' && Array.isArray(data.items)) {
+            currentPageItems = data.items;
+            totalCalls = data.total || 0;
+            totalPages = Math.max(1, data.total_pages || 1);
+            currentPage = data.page || currentPage;
+          } else if (Array.isArray(data)) {
+            currentPageItems = data;
+            totalCalls = data.length;
+            totalPages = 1;
+          } else {
+            currentPageItems = [];
+            totalCalls = 0;
+            totalPages = 1;
+          }
+
+          evaluations = currentPageItems;
+
+          const emptyState = document.getElementById('emptyState');
+          const resultsArea = document.getElementById('resultsArea');
+          const summaryCard = document.getElementById('summaryCard');
+
+          if (totalCalls === 0 && !isFiltered) {
+            evaluations = [defaultSampleEvaluation];
+            currentPageItems = evaluations;
+            if (emptyState) emptyState.style.display = 'block';
+            if (resultsArea) resultsArea.style.display = 'none';
+            if (summaryCard) summaryCard.style.display = 'none';
+            return;
+          }
+
+          if (emptyState) emptyState.style.display = 'none';
+          if (resultsArea) resultsArea.style.display = 'block';
+          if (summaryCard) summaryCard.style.display = 'block';
+
+          if (currentPageItems.length > 0) {
+            if (selectedCallIndex >= currentPageItems.length || selectedCallIndex < 0) {
+              selectedCallIndex = 0;
+            }
+            renderSingleScorecard(currentPageItems[selectedCallIndex]);
+            renderSidebarContent(currentPageItems[selectedCallIndex]);
+            updateSidebarNavButtons();
+          }
+
+          renderSummaryTableRows(isFiltered);
+          updatePaginationControls();
+        })
+        .catch(err => {
+          console.warn('Pagination query error:', err);
+        });
+    }
+
+    function renderEvaluations() {
+      fetchPaginatedResults(currentPage);
+    }
+
+    function renderSummaryTableRows(isFiltered) {
       const countBadge = document.getElementById('filterCountBadge');
       const summaryTotal = document.getElementById('summaryTotalCount');
       const tbody = document.getElementById('summaryTableRows');
       if (!tbody) return;
 
-      const resVal = resSelect ? resSelect.value : 'all';
-      const agentVal = agentSelect ? agentSelect.value : 'all';
-      const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
-
-      const isFiltered = (resVal !== 'all' || agentVal !== 'all' || searchVal !== '');
-      if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-block' : 'none';
-
-      const totalCalls = evaluations.length;
       if (summaryTotal) summaryTotal.textContent = totalCalls;
-
-      const filtered = [];
-      evaluations.forEach((item, originalIndex) => {
-        const res = item.data?.resolution?.status || 'unclear';
-        if (resVal !== 'all' && res !== resVal) return;
-
-        const meta = parseCallMetadata(item.filename || item.data?.audio_file);
-        if (agentVal !== 'all' && meta.agent !== agentVal) return;
-
-        if (searchVal) {
-          const fname = (item.filename || item.data?.audio_file || '').toLowerCase();
-          const ag = (meta.agent || '').toLowerCase();
-          const ph = (meta.phone || '').toLowerCase();
-          const lang = (item.data?.language_analysis?.dominant_language || '').toLowerCase();
-          const combined = `${fname} ${ag} ${ph} ${lang} ${res}`;
-          if (!combined.includes(searchVal)) return;
-        }
-
-        filtered.push({ item, originalIndex, meta });
-      });
 
       if (countBadge) {
         if (isFiltered) {
-          countBadge.textContent = `Showing ${filtered.length} of ${totalCalls} calls`;
+          countBadge.textContent = `Showing page ${currentPage} of ${totalPages} (${totalCalls} matching calls)`;
         } else {
           countBadge.textContent = `Showing all ${totalCalls} calls`;
         }
       }
 
-      if (filtered.length === 0) {
+      if (!currentPageItems || currentPageItems.length === 0) {
         tbody.innerHTML = `
           <tr>
             <td colspan="10" style="text-align: center; padding: 2rem; color: var(--slate-500);">
@@ -2274,14 +2320,15 @@
         return;
       }
 
-      tbody.innerHTML = filtered.map(({ item, originalIndex, meta }) => {
+      tbody.innerHTML = currentPageItems.map((item, pageIndex) => {
+        const meta = parseCallMetadata(item.filename || item.data?.audio_file);
         const sc = item.data?.scorecard || {};
         const total = sc.total_score != null ? sc.total_score.toFixed(1) : '-';
         const prof = sc.professionalism_score != null ? sc.professionalism_score.toFixed(1) : '-';
         const resp = sc.respectfulness_score != null ? sc.respectfulness_score.toFixed(1) : '-';
         const pol = sc.politeness_score != null ? sc.politeness_score.toFixed(1) : '-';
         const res = item.data?.resolution?.status || 'unclear';
-        const fname = item.filename || item.data?.audio_file || ('Call #' + (originalIndex + 1));
+        const fname = item.filename || item.data?.audio_file || ('Call #' + ((currentPage - 1) * pageSize + pageIndex + 1));
 
         const langData = item.data?.language_analysis || {};
         const domLang = langData.dominant_language || 'English';
@@ -2292,11 +2339,11 @@
         const introClass = isIntroComp ? 'badge-resolved' : (introStatus === 'partially_compliant' ? 'badge-partially_resolved' : 'badge-unresolved');
         const introText = isIntroComp ? 'Compliant' : (introStatus === 'partially_compliant' ? 'Partial' : 'Missing');
 
-        const isSelected = originalIndex === selectedCallIndex;
+        const isSelected = pageIndex === selectedCallIndex;
         const rowStyle = isSelected ? 'background-color: #eff6ff; font-weight: 500;' : '';
 
         return `
-          <tr onclick="selectCallFromTable(${originalIndex})" style="cursor: pointer; ${rowStyle}" title="Click to inspect this call">
+          <tr onclick="selectCallFromTable(${pageIndex})" style="cursor: pointer; ${rowStyle}" title="Click to inspect this call">
             <td><strong>${escapeHtml(fname)}</strong></td>
             <td><span style="font-weight: 600; color: var(--slate-700);">${escapeHtml(meta.agent)}</span></td>
             <td><span style="font-weight: 600; color: var(--slate-700);">${escapeHtml(domLang)}</span></td>
@@ -2306,10 +2353,40 @@
             <td>${resp}</td>
             <td>${pol}</td>
             <td><span class="badge badge-${res}">${res}</span></td>
-            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCallFromTable(${originalIndex})">Inspect</button></td>
+            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCallFromTable(${pageIndex})">Inspect</button></td>
           </tr>
         `;
       }).join('');
+    }
+
+    function updatePaginationControls() {
+      const infoEl = document.getElementById('paginationInfo');
+      const currEl = document.getElementById('paginationCurrentPage');
+      const totEl = document.getElementById('paginationTotalPages');
+      const btnFirst = document.getElementById('btnFirstPage');
+      const btnPrev = document.getElementById('btnPrevPage');
+      const btnNext = document.getElementById('btnNextPage');
+      const btnLast = document.getElementById('btnLastPage');
+
+      if (currEl) currEl.textContent = currentPage;
+      if (totEl) totEl.textContent = totalPages;
+
+      const startIdx = totalCalls === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+      const endIdx = Math.min(totalCalls, currentPage * pageSize);
+      if (infoEl) {
+        infoEl.textContent = totalCalls > 0
+          ? `Showing ${startIdx}-${endIdx} of ${totalCalls} calls`
+          : 'Showing 0 calls';
+      }
+
+      if (btnFirst) btnFirst.disabled = (currentPage <= 1);
+      if (btnPrev) btnPrev.disabled = (currentPage <= 1);
+      if (btnNext) btnNext.disabled = (currentPage >= totalPages);
+      if (btnLast) btnLast.disabled = (currentPage >= totalPages);
+    }
+
+    function applyCallFilters() {
+      renderSummaryTableRows(false);
     }
 
     function resetCallFilters() {
@@ -2319,32 +2396,34 @@
       if (resSelect) resSelect.value = 'all';
       if (agentSelect) agentSelect.value = 'all';
       if (searchInput) searchInput.value = '';
-      applyCallFilters();
+      goToPage(1);
     }
 
     function populateSummaryTable() {
       populateAgentFilterOptions();
-      applyCallFilters();
+      goToPage(1);
     }
 
     function selectCallFromTable(idx) {
+      if (!currentPageItems || !currentPageItems[idx]) return;
       selectedCallIndex = idx;
-      renderSingleScorecard(evaluations[selectedCallIndex]);
+      evaluations = currentPageItems;
+      renderSingleScorecard(currentPageItems[selectedCallIndex]);
       openSidebar(idx);
-      applyCallFilters();
+      renderSummaryTableRows(false);
     }
 
     // SIDEBAR DRAWER CONTROLS
     function openSidebar(idx) {
-      if (!evaluations || evaluations.length === 0) return;
-      selectedCallIndex = Math.max(0, Math.min(evaluations.length - 1, idx));
+      if (!currentPageItems || currentPageItems.length === 0) return;
+      selectedCallIndex = Math.max(0, Math.min(currentPageItems.length - 1, idx));
       
       const drawer = document.getElementById('sidebarDrawer');
       const overlay = document.getElementById('sidebarOverlay');
       if (drawer) drawer.classList.add('open');
       if (overlay) overlay.classList.add('active');
 
-      renderSidebarContent(evaluations[selectedCallIndex]);
+      renderSidebarContent(currentPageItems[selectedCallIndex]);
       updateSidebarNavButtons();
     }
 
@@ -2356,30 +2435,34 @@
     }
 
     function nextCall() {
-      if (!evaluations || evaluations.length === 0) return;
-      if (selectedCallIndex < evaluations.length - 1) {
+      if (!currentPageItems || currentPageItems.length === 0) return;
+      if (selectedCallIndex < currentPageItems.length - 1) {
         selectedCallIndex++;
-        renderSidebarContent(evaluations[selectedCallIndex]);
-        renderSingleScorecard(evaluations[selectedCallIndex]);
+        renderSidebarContent(currentPageItems[selectedCallIndex]);
+        renderSingleScorecard(currentPageItems[selectedCallIndex]);
         updateSidebarNavButtons();
-        applyCallFilters();
+        renderSummaryTableRows(false);
+      } else if (currentPage < totalPages) {
+        goToPage(currentPage + 1);
       }
     }
 
     function prevCall() {
-      if (!evaluations || evaluations.length === 0) return;
+      if (!currentPageItems || currentPageItems.length === 0) return;
       if (selectedCallIndex > 0) {
         selectedCallIndex--;
-        renderSidebarContent(evaluations[selectedCallIndex]);
-        renderSingleScorecard(evaluations[selectedCallIndex]);
+        renderSidebarContent(currentPageItems[selectedCallIndex]);
+        renderSingleScorecard(currentPageItems[selectedCallIndex]);
         updateSidebarNavButtons();
-        applyCallFilters();
+        renderSummaryTableRows(false);
+      } else if (currentPage > 1) {
+        goToPage(currentPage - 1);
       }
     }
 
     function updateSidebarNavButtons() {
-      const total = evaluations.length;
-      const cur = selectedCallIndex + 1;
+      const total = totalCalls || currentPageItems.length;
+      const cur = (currentPage - 1) * pageSize + selectedCallIndex + 1;
       const text = `Call ${cur} of ${total}`;
       const footerText = `${cur} / ${total}`;
 
@@ -2393,12 +2476,12 @@
       const fPrevBtn = document.getElementById('sbFooterPrevBtn');
       const fNextBtn = document.getElementById('sbFooterNextBtn');
 
-      const isFirst = selectedCallIndex <= 0;
-      const isLast = selectedCallIndex >= total - 1;
+      const isFirst = (currentPage === 1 && selectedCallIndex === 0);
+      const isLast = (currentPage === totalPages && selectedCallIndex === currentPageItems.length - 1);
 
       if (prevBtn) prevBtn.disabled = isFirst;
-      if (fPrevBtn) fPrevBtn.disabled = isFirst;
       if (nextBtn) nextBtn.disabled = isLast;
+      if (fPrevBtn) fPrevBtn.disabled = isFirst;
       if (fNextBtn) fNextBtn.disabled = isLast;
     }
 
