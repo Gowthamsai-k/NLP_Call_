@@ -1470,25 +1470,25 @@
     let currentJobId = null;
     let jobPollTimer = null;
 
-    // // Check backend server on load
-    // window.addEventListener('DOMContentLoaded', () => {
-    //   setupDropzones();
-    //   checkBackendConnection();
-    //   fetchExistingResults();
-    // });
+    // Check backend server on load
+    window.addEventListener('DOMContentLoaded', () => {
+      setupDropzones();
+      checkBackendConnection();
+      fetchExistingResults();
+    });
 
-    // function checkBackendConnection() {
-    //   fetch('/api/ping')
-    //     .then(res => res.json())
-    //     .then(data => {
-    //       document.getElementById('serverStatusDot').style.backgroundColor = '#0284c7';
-    //       document.getElementById('serverStatusText').textContent = 'Backend Connected';
-    //     })
-    //     .catch(() => {
-    //       document.getElementById('serverStatusDot').style.backgroundColor = '#f59e0b';
-    //       document.getElementById('serverStatusText').textContent = 'Static / Offline Mode';
-    //     });
-    // }
+    function checkBackendConnection() {
+      fetch('/api/ping')
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('serverStatusDot').style.backgroundColor = '#0284c7';
+          document.getElementById('serverStatusText').textContent = 'Backend Connected';
+        })
+        .catch(() => {
+          document.getElementById('serverStatusDot').style.backgroundColor = '#f59e0b';
+          document.getElementById('serverStatusText').textContent = 'Static / Offline Mode';
+        });
+    }
 
     // Default illustrative evaluation shown when no calls have been evaluated yet
     const defaultSampleEvaluation = {
