@@ -430,7 +430,7 @@ def run_server(port: int = 8000, host: str = "0.0.0.0"):
     server_address = (host, port)
     httpd = HTTPServer(server_address, DashboardHandler)
     logger.info("=" * 60)
-    logger.info(f"🚀 Customer Support Scorecard Dashboard running at:")
+    logger.info("🚀 Customer Support Scorecard Dashboard running at:")
     logger.info(f"   👉 http://localhost:{port}")
     if host == "0.0.0.0":
         logger.info(f"   👉 http://127.0.0.1:{port}")
