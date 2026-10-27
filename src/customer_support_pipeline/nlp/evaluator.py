@@ -262,10 +262,19 @@ def run_call_evaluation(
         available_input = EVAL_MAX_MODEL_LEN - max_new_tokens
 
         if prompt_tokens > available_input:
-            raise ValueError(
-                f"Prompt too long: {prompt_tokens} input tokens + {max_new_tokens} output tokens "
-                f"exceeds {EVAL_MAX_MODEL_LEN} context limit."
-            )
+            if max_new_tokens > 600:
+                needed = prompt_tokens - available_input
+                reduction = min(max_new_tokens - 600, needed)
+                max_new_tokens -= reduction
+                available_input = EVAL_MAX_MODEL_LEN - max_new_tokens
+
+            if prompt_tokens > available_input:
+                logger.warning(
+                    f"Prompt tokens ({prompt_tokens}) exceeds available budget ({available_input}). "
+                    "Adaptively clamping prompt tokens to stay strictly within context limit..."
+                )
+                enc = tokenizer.encode(formatted, add_special_tokens=False)
+                formatted = tokenizer.decode(enc[:available_input], skip_special_tokens=False)
 
         if vllm_llm is not None:
             from vllm import SamplingParams
@@ -339,21 +348,31 @@ def run_call_evaluation(
         ) from last_error
 
     try:
-        midpoint = (len(transcript_lines) + 1) // 2
-        chunks = [
-            {
-                "chunk_number": 1,
-                "start_index": 0,
-                "end_index": midpoint,
-                "transcript": "\n".join(transcript_lines[:midpoint]),
-            },
-            {
-                "chunk_number": 2,
-                "start_index": midpoint,
-                "end_index": len(transcript_lines),
-                "transcript": "\n".join(transcript_lines[midpoint:]),
-            },
-        ]
+        # Build token-bounded chunks so NO chunk ever exceeds the model context limit
+        max_chunk_tokens = CHUNK_TEXT_TOKENS
+        chunks = []
+        c_start = 0
+        c_num = 1
+        while c_start < len(transcript_lines):
+            c_lines = []
+            c_end = c_start
+            while c_end < len(transcript_lines):
+                candidate = c_lines + [transcript_lines[c_end]]
+                if c_lines and count_tokens("\n".join(candidate)) > max_chunk_tokens:
+                    break
+                c_lines.append(transcript_lines[c_end])
+                c_end += 1
+            if c_end == c_start:
+                c_end = c_start + 1
+                c_lines = [transcript_lines[c_start]]
+            chunks.append({
+                "chunk_number": c_num,
+                "start_index": c_start,
+                "end_index": c_end,
+                "transcript": "\n".join(c_lines),
+            })
+            c_start = c_end
+            c_num += 1
 
         def build_chunk_prompt(chunk, total_chunks):
             return f"""
@@ -397,12 +416,22 @@ TASKS:
             logger.info(f"Evaluating chunk {number}/{len(chunks)}")
             prompt = build_chunk_prompt(chunk, len(chunks))
 
-            result = generate_json(
-                prompt,
-                max_new_tokens=CHUNK_OUTPUT_TOKENS,
-                retries=EVAL_MAX_RETRIES,
-                debug_name=f"chunk_{number:03d}",
-            )
+            try:
+                result = generate_json(
+                    prompt,
+                    max_new_tokens=CHUNK_OUTPUT_TOKENS,
+                    retries=EVAL_MAX_RETRIES,
+                    debug_name=f"chunk_{number:03d}",
+                )
+            except Exception as chunk_err:
+                logger.warning(
+                    f"Chunk {number} evaluation LLM failed ({chunk_err}). "
+                    "Assembling safe fallback partial evaluation..."
+                )
+                result = empty_evaluation()
+                result["uncertainties"].append(
+                    f"Chunk {number} evaluation fallback: {str(chunk_err)[:100]}"
+                )
 
             record = {
                 "chunk_number": number,

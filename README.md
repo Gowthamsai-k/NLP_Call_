@@ -140,12 +140,13 @@ You can tune parameters via environment variables without modifying code:
 | `WHISPER_GPU_MEM` | `0.30` | GPU VRAM fraction allocated for ASR (default 30%, fits ~2.4GB on 8GB VRAM). |
 | `INTENT_GPU_MEM` | `0.85` | GPU VRAM fraction for Intent Extraction LLM (default 85%, fits ~6.8GB on 8GB VRAM). |
 | `EVAL_GPU_MEM` | `0.85` | GPU VRAM fraction for Evaluation LLM (default 85%, fits ~6.8GB on 8GB VRAM). |
-| `INTENT_MAX_MODEL_LEN` | `4096` | Max context window tokens (bounded for 8GB VRAM). |
-| `EVAL_MAX_MODEL_LEN` | `4096` | Max context window tokens (bounded for 8GB VRAM). |
+| `INTENT_MAX_MODEL_LEN` | `8192` | Max context window tokens (fits comfortably in 8GB VRAM with eager mode). |
+| `EVAL_MAX_MODEL_LEN` | `8192` | Max context window tokens (fits comfortably in 8GB VRAM with eager mode). |
+| `CHUNK_TEXT_TOKENS` | `1200` | Slices long call transcripts into bounded chunks so context limits are never exceeded. |
 
 > [!NOTE]
 > **Out-of-the-Box 8GB VRAM Optimization**:
-> The pipeline is pre-configured to run out-of-the-box on 8GB VRAM GPUs (e.g., RTX 5050, RTX Pro 2000 Blackwell) using `enforce_eager=True` (disabling bulky CUDA graph buffers) and sequential stage execution. If running on larger GPUs (e.g. 15GB T4 or 24GB A10G), you may optionally increase `INTENT_MAX_MODEL_LEN=8192`.
+> The pipeline is pre-configured to run out-of-the-box on 8GB VRAM GPUs (e.g., RTX 5050, RTX Pro 2000 Blackwell) using `enforce_eager=True` (disabling bulky CUDA graph buffers) and sequential stage execution with dynamic token-bounded chunking.
 
 ---
 

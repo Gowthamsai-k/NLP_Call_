@@ -34,9 +34,9 @@ WHISPER_GPU_MEM = float(os.environ.get("WHISPER_GPU_MEM", "0.30"))
 # ==============================================================================
 # INTENT EXTRACTION CONFIGURATION
 # ==============================================================================
-INTENT_MAX_MODEL_LEN = int(os.environ.get("INTENT_MAX_MODEL_LEN", "4096"))
-MAX_TRANSCRIPT_TOKENS = 2200
-MAX_BATCH_OUTPUT_TOKENS = 1200
+INTENT_MAX_MODEL_LEN = int(os.environ.get("INTENT_MAX_MODEL_LEN", "8192"))
+MAX_TRANSCRIPT_TOKENS = int(os.environ.get("MAX_TRANSCRIPT_TOKENS", "2000"))
+MAX_BATCH_OUTPUT_TOKENS = 1000
 MAX_MERGE_OUTPUT_TOKENS = 1200
 OVERLAP_SEGMENTS = 2
 # Optimized default for 8GB VRAM (allows ~6GB Qwen 2.5 3B fp16 weights + KV cache)
@@ -81,10 +81,10 @@ Return JSON only.
 # ==============================================================================
 # CALL EVALUATION CONFIGURATION
 # ==============================================================================
-EVAL_MAX_MODEL_LEN = int(os.environ.get("EVAL_MAX_MODEL_LEN", "4096"))
-CHUNK_TEXT_TOKENS = 1000
-CHUNK_OUTPUT_TOKENS = 1800
-MERGE_OUTPUT_TOKENS = 2200
+EVAL_MAX_MODEL_LEN = int(os.environ.get("EVAL_MAX_MODEL_LEN", "8192"))
+CHUNK_TEXT_TOKENS = int(os.environ.get("CHUNK_TEXT_TOKENS", "1200"))
+CHUNK_OUTPUT_TOKENS = int(os.environ.get("CHUNK_OUTPUT_TOKENS", "1000"))
+MERGE_OUTPUT_TOKENS = int(os.environ.get("MERGE_OUTPUT_TOKENS", "1200"))
 MERGE_GROUP_SIZE = 2
 EVAL_MAX_RETRIES = 2
 # Optimized default for 8GB VRAM (allows ~6GB Qwen 2.5 3B fp16 weights + KV cache)

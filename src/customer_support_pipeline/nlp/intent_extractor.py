@@ -297,10 +297,19 @@ def run_intent_extraction(
         max_allowed = INTENT_MAX_MODEL_LEN - max_new_tokens
 
         if prompt_tokens > max_allowed:
-            raise ValueError(
-                f"Prompt is too long: {prompt_tokens} tokens + "
-                f"{max_new_tokens} output tokens exceeds {INTENT_MAX_MODEL_LEN} limit."
-            )
+            if max_new_tokens > 600:
+                needed = prompt_tokens - max_allowed
+                reduction = min(max_new_tokens - 600, needed)
+                max_new_tokens -= reduction
+                max_allowed = INTENT_MAX_MODEL_LEN - max_new_tokens
+
+            if prompt_tokens > max_allowed:
+                logger.warning(
+                    f"Prompt tokens ({prompt_tokens}) exceeds available budget ({max_allowed}). "
+                    "Adaptively clamping prompt tokens to stay strictly within context limit..."
+                )
+                enc = tokenizer.encode(formatted_prompt, add_special_tokens=False)
+                formatted_prompt = tokenizer.decode(enc[:max_allowed], skip_special_tokens=False)
 
         if vllm_llm is not None:
             from vllm import SamplingParams
