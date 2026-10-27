@@ -766,57 +766,42 @@
       line-height: 1.4;
     }
 
-    /* Evidence Table */
-    .evidence-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-      margin-top: 0.75rem;
+    /* Call & Agent Metadata Grid */
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
     }
 
-    .evidence-table th {
-      background: var(--slate-100);
-      color: var(--slate-700);
-      text-align: left;
-      padding: 0.65rem 0.85rem;
+    .meta-item {
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      transition: all 0.2s ease;
+    }
+
+    .meta-item:hover {
+      border-color: #bfdbfe;
+      background: #f8fafc;
+    }
+
+    .meta-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--slate-500);
+      margin-bottom: 0.35rem;
+    }
+
+    .meta-val {
+      font-size: 0.92rem;
       font-weight: 600;
-      border-bottom: 2px solid var(--slate-200);
-    }
-
-    .evidence-table td {
-      padding: 0.75rem 0.85rem;
-      border-bottom: 1px solid var(--slate-200);
-      color: var(--slate-700);
-      vertical-align: top;
-    }
-
-    .evidence-table tr:hover {
-      background-color: var(--slate-50);
-    }
-
-    .timestamp-badge {
-      background: var(--slate-200);
-      color: var(--slate-700);
-      font-family: monospace;
-      padding: 0.2rem 0.45rem;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      white-space: nowrap;
-    }
-
-    .speaker-badge {
-      background: var(--primary-light);
-      color: var(--primary);
-      font-weight: 600;
-      padding: 0.2rem 0.45rem;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      white-space: nowrap;
-    }
-
-    .quote-text {
-      font-style: italic;
       color: var(--slate-800);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* Comparison Table for batch */
@@ -1213,7 +1198,8 @@
           <div class="meta-tags">
             <span id="heroResolutionBadge" class="badge badge-resolved">Resolved</span>
             <span id="heroIntentReviewBadge" class="badge" style="background: rgba(255,255,255,0.15); color: white;">Intent: Supported</span>
-            <span id="heroEvidenceCount" class="badge" style="background: rgba(255,255,255,0.15); color: white;">6 Evidence Points</span>
+            <span id="heroDeptBadge" class="badge" style="background: rgba(255,255,255,0.15); color: white;">Support</span>
+            <span id="heroAgentBadge" class="badge" style="background: rgba(2, 132, 199, 0.25); color: #e0f2fe; border: 1px solid rgba(255,255,255,0.2);">Support Executive</span>
           </div>
         </div>
       </div>
@@ -1284,26 +1270,74 @@
         </div>
       </div>
 
-      <!-- Evidence Section -->
+      <!-- Call & Agent Metadata Card -->
       <div class="card" style="margin-top: 1.5rem;">
         <div class="card-header">
-          <h2>Transcript Evidence &amp; Quotations</h2>
+          <h2>Call &amp; Agent Metadata</h2>
+          <span style="font-size: 0.8rem; color: var(--slate-500);">Operational Call Session Attributes</span>
         </div>
-        <div class="card-body" style="overflow-x: auto;">
-          <table class="evidence-table">
-            <thead>
-              <tr>
-                <th style="width: 110px;">Timestamp</th>
-                <th style="width: 120px;">Speaker</th>
-                <th style="width: 130px;">Category</th>
-                <th>Quote Excerpt</th>
-                <th>Interpretation</th>
-              </tr>
-            </thead>
-            <tbody id="evidenceTableBody">
-              <!-- Dynamic -->
-            </tbody>
-          </table>
+        <div class="card-body">
+          <div class="meta-grid">
+            <div class="meta-item">
+              <div class="meta-label">Support Executive</div>
+              <div class="meta-val" id="metaAgentName" title="">--</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Department</div>
+              <div class="meta-val" id="metaDepartment">Support</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Queue / Ticket ID</div>
+              <div class="meta-val" id="metaQueueId">--</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Customer Contact</div>
+              <div class="meta-val" id="metaCustomerPhone" style="font-family: monospace;">--</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Call Timestamp</div>
+              <div class="meta-val" id="metaCallDate">--</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Intent Review</div>
+              <div class="meta-val" id="metaIntentStatus" style="color: var(--primary);">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resolution & Follow-up Action Tracker Card -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+          <h2>Resolution Outcome &amp; Action Item Tracker</h2>
+          <span id="trackerResolutionBadge" class="badge badge-resolved">Resolved</span>
+        </div>
+        <div class="card-body">
+          <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem;">
+            <div style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--primary); letter-spacing: 0.05em; margin-bottom: 0.35rem;">Executive Outcome Summary</div>
+            <p id="trackerExplanationText" style="color: var(--slate-700); font-size: 0.95rem; line-height: 1.5;">--</p>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+            <div>
+              <div style="font-size: 0.8rem; font-weight: 700; color: var(--slate-700); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.4rem;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary);"></span>
+                Key Resolution Deliverables &amp; Outcomes
+              </div>
+              <ul class="item-list" id="resolutionDeliverablesList">
+                <!-- Dynamic -->
+              </ul>
+            </div>
+            <div>
+              <div style="font-size: 0.8rem; font-weight: 700; color: var(--slate-700); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.4rem;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warning);"></span>
+                Acoustic Clarity &amp; Call Observations
+              </div>
+              <div id="callObservationsBox" style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 8px; padding: 0.85rem; font-size: 0.85rem; color: var(--slate-600); min-height: 90px; line-height: 1.45;">
+                No audio quality concerns or transcription ambiguities detected.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1421,22 +1455,19 @@
         </div>
       </div>
 
-      <!-- Evidence Quotes in Sidebar -->
+      <!-- Call & Agent Metadata in Sidebar -->
       <div class="card" style="margin-bottom: 0;">
         <div class="card-header" style="padding: 0.65rem 0.9rem;">
-          <h2 style="font-size: 0.9rem;">Transcript Evidence (<span id="sbEvidenceCount">0</span> quotes)</h2>
+          <h2 style="font-size: 0.9rem;">Call &amp; Agent Info</h2>
         </div>
-        <div class="card-body" style="padding: 0; overflow-x: auto;">
-          <table class="evidence-table" style="font-size: 0.76rem;">
-            <thead>
-              <tr>
-                <th style="width: 80px;">Time</th>
-                <th style="width: 75px;">Speaker</th>
-                <th>Quote Excerpt &amp; Notes</th>
-              </tr>
-            </thead>
-            <tbody id="sbEvidenceTableBody"></tbody>
-          </table>
+        <div class="card-body" style="padding: 0.75rem 0.9rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.82rem;">
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Agent:</span><span id="sbAgentVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Department:</span><span id="sbDeptVal" style="font-weight: 600; color: var(--slate-800);">Support</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Ticket ID:</span><span id="sbQueueVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Customer:</span><span id="sbPhoneVal" style="font-weight: 600; font-family: monospace; color: var(--slate-800);">--</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Call Time:</span><span id="sbDateVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1464,22 +1495,22 @@
     // Check backend server on load
     window.addEventListener('DOMContentLoaded', () => {
       setupDropzones();
-      checkBackendConnection();
+      // checkBackendConnection();
       fetchExistingResults();
     });
 
-    function checkBackendConnection() {
-      fetch('/api/ping')
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById('serverStatusDot').style.backgroundColor = '#0284c7';
-          document.getElementById('serverStatusText').textContent = 'Backend Connected';
-        })
-        .catch(() => {
-          document.getElementById('serverStatusDot').style.backgroundColor = '#f59e0b';
-          document.getElementById('serverStatusText').textContent = 'Static / Offline Mode';
-        });
-    }
+    // function checkBackendConnection() {
+    //   fetch('/api/ping')
+    //     .then(res => res.json())
+    //     .then(data => {
+    //       document.getElementById('serverStatusDot').style.backgroundColor = '#0284c7';
+    //       document.getElementById('serverStatusText').textContent = 'Backend Connected';
+    //     })
+    //     .catch(() => {
+    //       document.getElementById('serverStatusDot').style.backgroundColor = '#f59e0b';
+    //       document.getElementById('serverStatusText').textContent = 'Static / Offline Mode';
+    //     });
+    // }
 
     function fetchExistingResults() {
       fetch('/api/results')
@@ -2086,8 +2117,14 @@
       badge.textContent = 'Status: ' + resStatus.replace('_', ' ');
 
       document.getElementById('sbIntentBadge').textContent = 'Intent: ' + (d.intent_review || 'reviewed');
-      const evidenceCount = Array.isArray(sc.evidence) ? sc.evidence.length : 0;
-      document.getElementById('sbEvidenceCount').textContent = evidenceCount;
+
+      // Call & Agent Metadata in Sidebar
+      const meta = parseCallMetadata(item.filename || d.audio_file || '');
+      document.getElementById('sbAgentVal').textContent = meta.agent;
+      document.getElementById('sbDeptVal').textContent = meta.dept;
+      document.getElementById('sbQueueVal').textContent = meta.queue;
+      document.getElementById('sbPhoneVal').textContent = meta.phone;
+      document.getElementById('sbDateVal').textContent = meta.dt;
 
       // Subscores
       setSidebarSubscore('sbProfVal', 'sbProfBar', 'sbProfRationale', sc.professionalism_score, sc.professionalism_rationale);
@@ -2108,24 +2145,6 @@
         actionsUl.innerHTML = d.agent_actions.map(a => `<li>${escapeHtml(a)}</li>`).join('');
       } else {
         actionsUl.innerHTML = '<li style="color: var(--slate-400);">No specific agent actions recorded.</li>';
-      }
-
-      // Evidence Table
-      const evTbody = document.getElementById('sbEvidenceTableBody');
-      if (Array.isArray(sc.evidence) && sc.evidence.length > 0) {
-        evTbody.innerHTML = sc.evidence.map(ev => `
-          <tr>
-            <td><span class="timestamp-badge">${escapeHtml(ev.timestamp || '-')}</span></td>
-            <td><span class="speaker-badge">${escapeHtml(ev.speaker_id || '-')}</span></td>
-            <td>
-              <div style="font-weight: 600; text-transform: capitalize; color: var(--primary); margin-bottom: 2px;">${escapeHtml(ev.category || '')}</div>
-              <div class="quote-text">"${escapeHtml(ev.quote || '')}"</div>
-              ${ev.interpretation ? `<div style="color: var(--slate-500); font-size: 0.72rem; margin-top: 2px;">Note: ${escapeHtml(ev.interpretation)}</div>` : ''}
-            </td>
-          </tr>
-        `).join('');
-      } else {
-        evTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--slate-400); padding: 1rem;">No direct quote evidence recorded.</td></tr>`;
       }
     }
 
@@ -2152,6 +2171,54 @@
       }
     }
 
+    // Parse structured metadata from audio filename (Next Education naming standard)
+    function parseCallMetadata(filename) {
+      if (!filename) {
+        return { agent: 'Support Rep', dept: 'Support', queue: 'General', callId: 'N/A', phone: 'Confidential', dt: 'Recorded Session' };
+      }
+      const stem = filename.replace(/\.[^/.]+$/, '');
+      const parts = stem.split('__');
+      if (parts.length >= 6) {
+        let agentRaw = parts[0];
+        let agent = agentRaw;
+        if (agentRaw.includes('_nexteducation_in')) {
+          agent = agentRaw.replace('_nexteducation_in', '@nexteducation.in').replace(/_/g, '.').replace('.@', '@');
+        } else {
+          agent = agentRaw.replace(/_/g, ' ');
+        }
+        const dept = parts[1] || 'Support';
+        const queue = (parts[2] && parts[2] !== '-1') ? parts[2] : 'General';
+        const callId = (parts[3] && parts[3] !== '-1') ? parts[3] : 'N/A';
+        const phoneRaw = parts[4] || '';
+        let phone = phoneRaw;
+        if (phoneRaw.length >= 10) {
+          phone = phoneRaw.slice(0, 2) + '******' + phoneRaw.slice(-4);
+        } else if (phoneRaw === '-1' || !phoneRaw) {
+          phone = 'Confidential';
+        }
+
+        let dt = parts[5] || 'Recorded Session';
+        const match = dt.match(/(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/);
+        if (match) {
+          const [_, y, m, d, hh, mm, ss] = match;
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthName = months[parseInt(m, 10) - 1] || m;
+          dt = `${parseInt(d, 10)} ${monthName} ${y}, ${hh}:${mm}:${ss}`;
+        }
+
+        return { agent, dept, queue, callId, phone, dt };
+      }
+
+      return {
+        agent: 'Support Rep',
+        dept: 'Customer Support',
+        queue: 'General',
+        callId: 'N/A',
+        phone: 'Confidential',
+        dt: 'Recorded Session'
+      };
+    }
+
     // Render single scorecard onto the same page
     function renderSingleScorecard(evalObj) {
       if (!evalObj || !evalObj.data) return;
@@ -2164,18 +2231,21 @@
       const pct = sc.total_score != null ? Math.min(100, Math.max(0, sc.total_score)) : 0;
       document.getElementById('heroScoreCircle').style.setProperty('--score-pct', pct);
 
-      document.getElementById('heroFileName').textContent = evalObj.filename || d.audio_file || 'Call Evaluation Scorecard';
+      const displayFilename = evalObj.filename || d.audio_file || 'Call Evaluation Scorecard';
+      document.getElementById('heroFileName').textContent = displayFilename;
       document.getElementById('heroExplanation').textContent = d.resolution?.explanation || 'No resolution explanation provided.';
 
-      // Badges
+      // Badges & Meta
       const resStatus = d.resolution?.status || 'unclear';
       const badge = document.getElementById('heroResolutionBadge');
       badge.className = 'badge badge-' + resStatus;
       badge.textContent = 'Status: ' + resStatus.replace('_', ' ');
 
       document.getElementById('heroIntentReviewBadge').textContent = 'Intent: ' + (d.intent_review || 'reviewed');
-      const evidenceCount = Array.isArray(sc.evidence) ? sc.evidence.length : 0;
-      document.getElementById('heroEvidenceCount').textContent = evidenceCount + ' Evidence Quotes';
+
+      const meta = parseCallMetadata(displayFilename);
+      document.getElementById('heroDeptBadge').textContent = meta.dept;
+      document.getElementById('heroAgentBadge').textContent = meta.agent;
 
       // 2. Subscores
       setSubscore('subscoreProf', 'subscoreProfBar', 'subscoreProfRationale', sc.professionalism_score, sc.professionalism_rationale);
@@ -2197,20 +2267,36 @@
         actionsUl.innerHTML = '<li style="color: var(--slate-400);">No specific agent actions recorded.</li>';
       }
 
-      // 4. Evidence Table
-      const evTbody = document.getElementById('evidenceTableBody');
-      if (Array.isArray(sc.evidence) && sc.evidence.length > 0) {
-        evTbody.innerHTML = sc.evidence.map(ev => `
-          <tr>
-            <td><span class="timestamp-badge">${escapeHtml(ev.timestamp || '-')}</span></td>
-            <td><span class="speaker-badge">${escapeHtml(ev.speaker_id || '-')}</span></td>
-            <td><span style="font-weight: 600; text-transform: capitalize;">${escapeHtml(ev.category || '-')}</span></td>
-            <td class="quote-text">"${escapeHtml(ev.quote || '')}"</td>
-            <td>${escapeHtml(ev.interpretation || '')}</td>
-          </tr>
-        `).join('');
+      // 4. Metadata Card Population
+      document.getElementById('metaAgentName').textContent = meta.agent;
+      document.getElementById('metaAgentName').title = meta.agent;
+      document.getElementById('metaDepartment').textContent = meta.dept;
+      document.getElementById('metaQueueId').textContent = meta.queue;
+      document.getElementById('metaCustomerPhone').textContent = meta.phone;
+      document.getElementById('metaCallDate').textContent = meta.dt;
+      document.getElementById('metaIntentStatus').textContent = (d.intent_review || 'Supported').toUpperCase();
+
+      // 5. Resolution Outcome & Action Tracker Card Population
+      const trackerBadge = document.getElementById('trackerResolutionBadge');
+      trackerBadge.className = 'badge badge-' + resStatus;
+      trackerBadge.textContent = 'Status: ' + resStatus.replace('_', ' ');
+
+      document.getElementById('trackerExplanationText').textContent = d.resolution?.explanation || 'All discussed items were addressed during this customer support call.';
+
+      const delivUl = document.getElementById('resolutionDeliverablesList');
+      if (Array.isArray(d.agent_actions) && d.agent_actions.length > 0) {
+        delivUl.innerHTML = d.agent_actions.map(a => `<li>${escapeHtml(a)}</li>`).join('');
       } else {
-        evTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--slate-400);">No direct quote evidence recorded.</td></tr>`;
+        delivUl.innerHTML = '<li style="color: var(--slate-400);">No specific resolution action items recorded.</li>';
+      }
+
+      const obsBox = document.getElementById('callObservationsBox');
+      if (Array.isArray(d.uncertainties) && d.uncertainties.length > 0) {
+        obsBox.innerHTML = '<ul style="padding-left: 1rem; margin: 0;">' + 
+          d.uncertainties.map(u => `<li style="margin-bottom: 0.35rem;">${escapeHtml(u)}</li>`).join('') + 
+          '</ul>';
+      } else {
+        obsBox.textContent = 'Clean acoustic session. Inquiries handled with high confidence and no noted transcription ambiguities.';
       }
     }
 
