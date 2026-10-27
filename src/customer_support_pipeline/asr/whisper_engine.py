@@ -24,7 +24,7 @@ from ..core.config import (
 )
 from ..audio.preprocessor import load_and_resample_audio, slice_turn_audio
 from ..core.memory import release_memory, log_vram
-from .language_detector import detect_audio_chunk_language, detect_text_language, resolve_language_name
+from .language_detector import detect_audio_chunk_language, resolve_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -237,9 +237,7 @@ def run_transcription(
             if not text:
                 continue
 
-            # Refine detected language via text script analysis (Devanagari, Telugu, Tamil, Latin, etc.)
-            refined_lang_code = detect_text_language(text) if (not active_lang or active_lang == "auto") else active_lang
-            turn_lang_name = resolve_language_name(refined_lang_code)
+            turn_lang_name = resolve_language_name(active_lang)
 
             item = {
                 "start": round(start_time, 3),
@@ -248,7 +246,7 @@ def run_transcription(
                 "text": text,
                 "raw_text": text,
                 "language": turn_lang_name,
-                "language_code": refined_lang_code,
+                "language_code": active_lang if active_lang and active_lang != "auto" else "en",
                 "words": [],
             }
             transcript_segments.append(item)
