@@ -1004,7 +1004,7 @@
   <header>
     <div class="header-content">
       <div class="header-title">
-        <h1>📊 Customer Support Call Scorecard Dashboard</h1>
+        <h1>Customer Support Call Scorecard Dashboard</h1>
         <p>Real-time speech quality evaluation, intent extraction, and automated scoring</p>
       </div>
       <div class="server-status" id="serverStatusBadge">
@@ -1018,7 +1018,7 @@
     <!-- Upload / Input Section -->
     <div class="card">
       <div class="card-header">
-        <h2>📥 Process Audio Calls</h2>
+        <h2>Process Audio Calls</h2>
         <span style="font-size: 0.8rem; color: var(--slate-500);">Accepts Single File, Folder, or ZIP Archive</span>
       </div>
       <div class="card-body">
@@ -1033,7 +1033,7 @@
         <!-- Single File Tab -->
         <div id="tab-single" class="tab-pane active">
           <div class="dropzone" id="dropzone-single" onclick="document.getElementById('input-single').click()">
-            <div class="dropzone-icon">🎙️</div>
+            <div class="dropzone-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></div>
             <p>Drag & drop a call recording here, or <span>browse file</span></p>
             <p class="hint">Supports .mp3, .wav, .m4a, .ogg, .flac, .aac</p>
             <input type="file" id="input-single" class="file-input" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac">
@@ -1043,7 +1043,7 @@
         <!-- Folder Tab -->
         <div id="tab-folder" class="tab-pane">
           <div class="dropzone" id="dropzone-folder" onclick="document.getElementById('input-folder').click()">
-            <div class="dropzone-icon">📁</div>
+            <div class="dropzone-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
             <p>Select or drag an entire <span>folder of audio recordings</span></p>
             <p class="hint">Processes all call recordings recursively</p>
             <input type="file" id="input-folder" class="file-input" webkitdirectory directory multiple>
@@ -1053,7 +1053,7 @@
         <!-- ZIP Tab -->
         <div id="tab-zip" class="tab-pane">
           <div class="dropzone" id="dropzone-zip" onclick="document.getElementById('input-zip').click()">
-            <div class="dropzone-icon">📦</div>
+            <div class="dropzone-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg></div>
             <p>Upload a <span>.zip archive</span> of audio calls</p>
             <p class="hint">Automatically unzips and evaluates each recording</p>
             <input type="file" id="input-zip" class="file-input" accept=".zip,.tar,.tar.gz,.gz">
@@ -1063,7 +1063,7 @@
         <!-- View Existing JSON Tab -->
         <div id="tab-json" class="tab-pane">
           <div class="dropzone" id="dropzone-json" onclick="document.getElementById('input-json').click()">
-            <div class="dropzone-icon">📋</div>
+            <div class="dropzone-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
             <p>Upload existing <span>call_evaluation.json</span> file(s)</p>
             <p class="hint">Instant visualization without reprocessing</p>
             <input type="file" id="input-json" class="file-input" accept=".json" multiple>
@@ -1119,7 +1119,7 @@
           <button id="clearBtn" class="btn btn-secondary" onclick="clearSelectedFiles()" style="display: none;">Clear</button>
           
           <button id="processBtn" class="btn btn-primary" onclick="startProcessing()" disabled>
-            <span>🚀 Process Call(s)</span>
+            <span>Process Call(s)</span>
           </button>
         </div>
 
@@ -1127,11 +1127,11 @@
         <div id="crashLogBox" class="card" style="display: none; border-left: 5px solid var(--danger); margin-top: 1.5rem; margin-bottom: 0;">
           <div class="card-header" style="background-color: #fef2f2; border-bottom: 1px solid #fee2e2;">
             <h2 style="color: var(--danger); font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
-              <span>⚠️</span> Pipeline Crash &amp; Error Log
+              Pipeline Crash &amp; Error Log
             </h2>
             <div style="display: flex; gap: 0.5rem;">
-              <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="copyCrashLog()">📋 Copy Error Log</button>
-              <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="hideCrashLog()">✖ Dismiss</button>
+              <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="copyCrashLog()">Copy Error Log</button>
+              <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="hideCrashLog()">&times; Dismiss</button>
             </div>
           </div>
           <div class="card-body" style="background-color: #fffaf0;">
@@ -1155,14 +1155,14 @@
         <select id="callDropdown" class="dropdown-select" onchange="onCallDropdownSelected(this.value)">
           <!-- Options populated dynamically -->
         </select>
-        <span class="dropdown-arrow">▼</span>
+        <span class="dropdown-arrow">&#9660;</span>
       </div>
     </div>
 
     <!-- Multi-file Summary Overview (collapsible toggle when files > 2) -->
     <div id="summaryCard" class="card" style="display: none;">
       <div class="card-header" style="cursor: pointer;" onclick="toggleSummaryTable()">
-        <h2>📑 Batch Score Overview (<span id="summaryTotalCount">0</span> calls)</h2>
+        <h2>Batch Score Overview (<span id="summaryTotalCount">0</span> calls)</h2>
         <span id="summaryToggleIcon" style="font-size: 0.9rem; color: var(--slate-500);">[Hide Table]</span>
       </div>
       <div class="card-body" id="summaryTableBody" style="padding: 0;">
@@ -1187,7 +1187,7 @@
 
     <!-- Empty State -->
     <div id="emptyState" class="empty-state">
-      <div class="empty-icon">🎧</div>
+      <div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg></div>
       <h3>No Call Evaluations Yet</h3>
       <p style="margin-top: 0.5rem; font-size: 0.9rem;">Upload audio files, folders, or ZIP archives above to run the pipeline and view dynamic score deliverables.</p>
     </div>
@@ -1260,7 +1260,7 @@
         <!-- Client Needs -->
         <div class="card" style="margin-bottom: 0;">
           <div class="card-header">
-            <h2>🎯 Client Needs Identified</h2>
+            <h2>Client Needs Identified</h2>
           </div>
           <div class="card-body">
             <ul class="item-list" id="clientNeedsList">
@@ -1272,7 +1272,7 @@
         <!-- Agent Actions -->
         <div class="card" style="margin-bottom: 0;">
           <div class="card-header">
-            <h2>🛠️ Agent Actions Taken</h2>
+            <h2>Agent Actions Taken</h2>
           </div>
           <div class="card-body">
             <ul class="item-list" id="agentActionsList">
@@ -1285,7 +1285,7 @@
       <!-- Evidence Section -->
       <div class="card" style="margin-top: 1.5rem;">
         <div class="card-header">
-          <h2>💬 Transcript Evidence & Quotations</h2>
+          <h2>Transcript Evidence &amp; Quotations</h2>
         </div>
         <div class="card-body" style="overflow-x: auto;">
           <table class="evidence-table">
@@ -1307,7 +1307,7 @@
 
       <!-- Export / Raw Deliverable -->
       <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
-        <button class="btn btn-secondary" onclick="downloadCurrentEvaluationJson()">💾 Download call_evaluation.json</button>
+        <button class="btn btn-secondary" onclick="downloadCurrentEvaluationJson()">Download call_evaluation.json</button>
       </div>
 
     </div>
@@ -1329,12 +1329,12 @@
       </div>
       <div class="sidebar-header-nav">
         <button id="sbPrevBtn" class="sidebar-nav-btn" onclick="prevCall()" title="Previous Call (Left Arrow)">
-          <span>⬅️ Prev</span>
+          <span>&larr; Prev</span>
         </button>
         <button id="sbNextBtn" class="sidebar-nav-btn" onclick="nextCall()" title="Next Call (Right Arrow)">
-          <span>Next ➡️</span>
+          <span>Next &rarr;</span>
         </button>
-        <button class="sidebar-close-btn" onclick="closeSidebar()" title="Close (Esc)">✖</button>
+        <button class="sidebar-close-btn" onclick="closeSidebar()" title="Close (Esc)">&times;</button>
       </div>
     </div>
 
@@ -1402,7 +1402,7 @@
       <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.25rem;">
         <div class="card" style="margin-bottom: 0;">
           <div class="card-header" style="padding: 0.65rem 0.9rem;">
-            <h2 style="font-size: 0.9rem;">🎯 Client Needs</h2>
+            <h2 style="font-size: 0.9rem;">Client Needs</h2>
           </div>
           <div class="card-body" style="padding: 0.75rem 0.9rem;">
             <ul class="item-list" id="sbClientNeedsList" style="font-size: 0.8rem;"></ul>
@@ -1411,7 +1411,7 @@
 
         <div class="card" style="margin-bottom: 0;">
           <div class="card-header" style="padding: 0.65rem 0.9rem;">
-            <h2 style="font-size: 0.9rem;">🛠️ Agent Actions</h2>
+            <h2 style="font-size: 0.9rem;">Agent Actions</h2>
           </div>
           <div class="card-body" style="padding: 0.75rem 0.9rem;">
             <ul class="item-list" id="sbAgentActionsList" style="font-size: 0.8rem;"></ul>
@@ -1422,7 +1422,7 @@
       <!-- Evidence Quotes in Sidebar -->
       <div class="card" style="margin-bottom: 0;">
         <div class="card-header" style="padding: 0.65rem 0.9rem;">
-          <h2 style="font-size: 0.9rem;">💬 Transcript Evidence (<span id="sbEvidenceCount">0</span> quotes)</h2>
+          <h2 style="font-size: 0.9rem;">Transcript Evidence (<span id="sbEvidenceCount">0</span> quotes)</h2>
         </div>
         <div class="card-body" style="padding: 0; overflow-x: auto;">
           <table class="evidence-table" style="font-size: 0.76rem;">
@@ -1442,11 +1442,11 @@
     <!-- Sidebar Footer with Next button and Download -->
     <div class="sidebar-footer">
       <div style="display: flex; gap: 0.5rem; align-items: center;">
-        <button id="sbFooterPrevBtn" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="prevCall()">⬅️ Prev</button>
+        <button id="sbFooterPrevBtn" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="prevCall()">&larr; Prev</button>
         <span id="sbFooterCounter" style="font-size: 0.8rem; color: var(--slate-600); font-weight: 600;">1 / 1</span>
-        <button id="sbFooterNextBtn" class="btn btn-primary" style="padding: 0.35rem 0.9rem; font-size: 0.8rem;" onclick="nextCall()">Next Call ➡️</button>
+        <button id="sbFooterNextBtn" class="btn btn-primary" style="padding: 0.35rem 0.9rem; font-size: 0.8rem;" onclick="nextCall()">Next Call &rarr;</button>
       </div>
-      <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="downloadCurrentEvaluationJson()">💾 Download JSON</button>
+      <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="downloadCurrentEvaluationJson()">Download JSON</button>
     </div>
   </div>
 
@@ -1580,7 +1580,7 @@
       container.style.display = 'flex';
       container.innerHTML = selectedFiles.map((file, idx) => `
         <div class="file-chip">
-          <div class="file-chip-name">🎵 ${file.webkitRelativePath || file.name}</div>
+          <div class="file-chip-name">${file.webkitRelativePath || file.name}</div>
           <div class="file-chip-size">${formatBytes(file.size)}</div>
         </div>
       `).join('');
@@ -1848,18 +1848,18 @@
           if (file.status === 'completed') {
             rowClass += ' completed';
             const scoreStr = file.score != null ? `Score: ${Number(file.score).toFixed(1)}/100` : 'Score Saved';
-            badgeHtml = `<span class="tracker-file-badge tracker-badge-completed">✅ ${scoreStr}</span>`;
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-completed">${scoreStr}</span>`;
           } else if (file.status === 'processing' || isCurrent) {
             rowClass += ' active';
             const sNum = file.stage_num || stageNum;
             const sName = file.stage_name || stageName;
-            badgeHtml = `<span class="tracker-file-badge tracker-badge-processing">⚡ Stage ${sNum}/8: ${escapeHtml(sName)}</span>`;
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-processing">Stage ${sNum}/8: ${escapeHtml(sName)}</span>`;
           } else if (file.status === 'failed') {
             rowClass += ' failed';
             const failTitle = file.failed_dir ? `Archived to: ${file.failed_dir} | Error: ${file.error || ''}` : (file.error || 'Failed');
-            badgeHtml = `<span class="tracker-file-badge tracker-badge-failed" title="${escapeHtml(failTitle)}">❌ Failed (placed in failed/)</span>`;
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-failed" title="${escapeHtml(failTitle)}">Failed (placed in failed/)</span>`;
           } else {
-            badgeHtml = `<span class="tracker-file-badge tracker-badge-queued">⏳ Queued</span>`;
+            badgeHtml = `<span class="tracker-file-badge tracker-badge-queued">Queued</span>`;
           }
 
           const evalIdx = evaluations.findIndex(e => e.filename === file.filename || e.id === file.filename || (e.data && e.data.audio_file === file.filename));
@@ -1868,7 +1868,6 @@
           return `
             <div class="${rowClass}" ${clickHandler}>
               <div class="tracker-file-info">
-                <span>🎵</span>
                 <span>${escapeHtml(file.filename)}</span>
               </div>
               <div class="tracker-file-status">
@@ -1955,7 +1954,7 @@
             <td>${resp}</td>
             <td>${pol}</td>
             <td><span class="badge badge-${res}">${res}</span></td>
-            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCallFromTable(${idx})">Inspect 🔍</button></td>
+            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCallFromTable(${idx})">Inspect</button></td>
           </tr>
         `;
       }).join('');
