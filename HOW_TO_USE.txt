@@ -1,0 +1,85 @@
+CUSTOMER SUPPORT INTELLIGENCE - STANDALONE BUILD USER GUIDE
+============================================================
+
+Overview:
+This directory contains the standalone executable distribution of the Customer Support Quality and Intelligence Dashboard. It has been compiled with Nuitka into native machine code with an embedded Python runtime, SQLite storage backend, and static dashboard assets.
+
+The application does NOT require Python, virtual environments, or pip dependencies to be installed on the destination machine.
+
+
+1. HOW TO RUN ON THIS LOCAL MACHINE
+------------------------------------------------------------
+You can run the standalone binary directly from your terminal:
+
+cd /home/next/NLP_Call_
+./build_dist/dashboard_server.dist/dashboard_server.bin --port 8000
+
+To run on a custom port (e.g. 8080):
+./build_dist/dashboard_server.dist/dashboard_server.bin --port 8080
+
+To bind to all network interfaces (for remote LAN or cloud access):
+./build_dist/dashboard_server.dist/dashboard_server.bin --port 8000 --host 0.0.0.0
+
+Once started, open your web browser at:
+http://localhost:8000
+
+
+2. HOW TO DISTRIBUTE TO ANOTHER MACHINE OR SERVER
+------------------------------------------------------------
+The entire standalone build has been compressed into a 37MB archive:
+customer_support_dashboard_standalone.tar.gz
+
+Follow these steps to deploy it to another Linux computer:
+
+Step 1: Copy the archive to the target machine
+Using SCP:
+scp customer_support_dashboard_standalone.tar.gz user@target_ip:/path/to/destination/
+
+Step 2: Extract the archive on the target machine
+ssh user@target_ip
+cd /path/to/destination/
+tar -xzvf customer_support_dashboard_standalone.tar.gz
+
+This creates the self-contained folder: dashboard_server.dist
+
+Step 3: Ensure FFmpeg is installed
+FFmpeg is used for 16kHz mono audio conversion. On Debian/Ubuntu:
+sudo apt update && sudo apt install -y ffmpeg
+
+Step 4: Launch the server
+cd dashboard_server.dist
+./dashboard_server.bin --port 8000 --host 0.0.0.0
+
+Step 5: Access the web interface
+Open your browser and navigate to:
+http://target_ip:8000
+
+
+3. KEY FEATURES AND USAGE IN DASHBOARD
+------------------------------------------------------------
+A. Upload and Processing:
+- Drag and drop single audio files (.mp3, .wav, .m4a), folders, or .zip archives into the upload area.
+- Click 'Start Pipeline Processing'.
+- The pipeline processes files with stage-by-stage batch execution, saving outputs immediately.
+
+B. Server-Side Pagination:
+- The Overview Table displays evaluated calls in paginated chunks (10, 25, 50, or 100 per page).
+- Use the navigation bar at the bottom to jump between pages (First, Prev, Page X of Y, Next, Last).
+- Only the records for the active page are loaded into memory, keeping performance fast and constant.
+
+C. Instant Indexed Filters:
+- Resolution filter: Filter calls by resolved, partially resolved, unresolved, unclear, or follow-up.
+- Executive filter: Filter by specific support executive name.
+- Search box: Type any keyword to search file name, agent email, or customer phone number (debounced at 250ms).
+
+D. SQLite Persistence:
+- All evaluation results are saved automatically into evaluations.db.
+- If you stop and restart the server, all previous call scorecards load instantly from SQLite with sub-millisecond retrieval.
+
+
+4. COMMAND LINE OPTIONS
+------------------------------------------------------------
+Options for dashboard_server.bin:
+  -h, --help       Show help message and exit
+  --port, -p PORT  Port to listen on (default: 8000)
+  --host HOST      Host interface to bind (default: 0.0.0.0)
