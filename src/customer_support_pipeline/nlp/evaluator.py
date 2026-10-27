@@ -64,6 +64,17 @@ def empty_evaluation() -> Dict[str, Any]:
             "evidence": [],
         },
         "uncertainties": [],
+        "diarization_timeline": {
+            "total_duration_seconds": 0.0,
+            "agent_speaker_id": None,
+            "client_speaker_id": None,
+            "agent_talk_time_seconds": 0.0,
+            "client_talk_time_seconds": 0.0,
+            "agent_talk_ratio_pct": 50.0,
+            "client_talk_ratio_pct": 50.0,
+            "total_turns": 0,
+            "turns": [],
+        },
     }
 
 
@@ -867,6 +878,51 @@ RULES:
         evaluation_obj["client_needs"] = evaluation_obj["client_needs"][:5]
         evaluation_obj["agent_actions"] = evaluation_obj["agent_actions"][:6]
         evaluation_obj["scorecard"]["evidence"] = evaluation_obj["scorecard"]["evidence"][:6]
+
+        # Generate diarization timeline and talk-time statistics for report and visualizers
+        timeline_turns = []
+        agent_talk_time = 0.0
+        client_talk_time = 0.0
+        total_duration = 0.0
+
+        for seg in segments:
+            s_start = round(float(seg.get("start", 0.0)), 2)
+            s_end = round(float(seg.get("end", s_start)), 2)
+            s_dur = max(0.0, round(s_end - s_start, 2))
+            s_spk = str(seg.get("speaker_id") or "UNKNOWN")
+
+            role = "agent" if (agent_id and s_spk == agent_id) else ("client" if (client_id and s_spk == client_id) else "other")
+            if role == "agent":
+                agent_talk_time += s_dur
+            elif role == "client":
+                client_talk_time += s_dur
+
+            if s_end > total_duration:
+                total_duration = s_end
+
+            timeline_turns.append({
+                "start": s_start,
+                "end": s_end,
+                "duration": s_dur,
+                "speaker_id": s_spk,
+                "role": role,
+            })
+
+        total_speech_time = agent_talk_time + client_talk_time
+        agent_pct = round((agent_talk_time / total_speech_time * 100), 1) if total_speech_time > 0 else 50.0
+        client_pct = round((client_talk_time / total_speech_time * 100), 1) if total_speech_time > 0 else 50.0
+
+        evaluation_obj["diarization_timeline"] = {
+            "total_duration_seconds": round(total_duration, 2),
+            "agent_speaker_id": agent_id,
+            "client_speaker_id": client_id,
+            "agent_talk_time_seconds": round(agent_talk_time, 2),
+            "client_talk_time_seconds": round(client_talk_time, 2),
+            "agent_talk_ratio_pct": agent_pct,
+            "client_talk_ratio_pct": client_pct,
+            "total_turns": len(timeline_turns),
+            "turns": timeline_turns,
+        }
 
         output_p.parent.mkdir(parents=True, exist_ok=True)
         with output_p.open("w", encoding="utf-8") as f:
