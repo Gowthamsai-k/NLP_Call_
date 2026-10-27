@@ -32,6 +32,20 @@ logger = logging.getLogger(__name__)
 
 def empty_evaluation() -> Dict[str, Any]:
     return {
+        "language_analysis": {
+            "agent_language": "English",
+            "client_language": "English",
+            "dominant_language": "English",
+            "explanation": "Standard language exchange.",
+        },
+        "introduction_check": {
+            "status": "non_compliant",
+            "compliant": False,
+            "agent_name_stated": None,
+            "company_named": False,
+            "greeting_quote": None,
+            "notes": "No formal introduction greeting identified.",
+        },
         "intent_review": "",
         "client_needs": [],
         "agent_actions": [],
@@ -452,6 +466,8 @@ TASKS:
             return {
                 "chunk_number": record["chunk_number"],
                 "segment_range": [record["start_index"] + 1, record["end_index"]],
+                "language_analysis": ev.get("language_analysis", {}),
+                "introduction_check": ev.get("introduction_check", {}),
                 "intent_review": str(ev.get("intent_review", ""))[:300],
                 "client_needs": (ev.get("client_needs") or [])[:4],
                 "agent_actions": (ev.get("agent_actions") or [])[:5],
@@ -520,6 +536,24 @@ RULES:
                     if len(output) >= limit:
                         break
                 return output
+
+            # Merge language analysis
+            for e in evaluations:
+                lang = e.get("language_analysis")
+                if isinstance(lang, dict) and lang.get("dominant_language"):
+                    result["language_analysis"] = lang
+                    break
+
+            # Merge introduction check (prioritize earliest chunk where intro occurs)
+            for e in evaluations:
+                intro = e.get("introduction_check")
+                if isinstance(intro, dict) and (intro.get("compliant") or intro.get("status") in ("compliant", "partially_compliant")):
+                    result["introduction_check"] = intro
+                    break
+            if not result["introduction_check"].get("status") and evaluations:
+                intro0 = evaluations[0].get("introduction_check")
+                if isinstance(intro0, dict):
+                    result["introduction_check"] = intro0
 
             result["intent_review"] = " ".join(
                 str(e.get("intent_review", "")).strip() for e in evaluations if e.get("intent_review")
@@ -659,6 +693,86 @@ RULES:
                 "The LLM merge failed; final output was assembled by deterministic Python fallback. Review half-level checkpoints."
             )
             evaluation_obj["uncertainties"] = list(dict.fromkeys(evaluation_obj["uncertainties"]))
+
+        # Sanitize and validate language_analysis
+        lang_analysis = evaluation_obj.get("language_analysis")
+        if not isinstance(lang_analysis, dict):
+            lang_analysis = {}
+        dom_lang = str(lang_analysis.get("dominant_language") or "").strip()
+        agent_lang = str(lang_analysis.get("agent_language") or "").strip()
+        client_lang = str(lang_analysis.get("client_language") or "").strip()
+        if not dom_lang or dom_lang.lower() in ("null", "none", "unknown"):
+            dom_lang = "English"
+        if not agent_lang or agent_lang.lower() in ("null", "none", "unknown"):
+            agent_lang = dom_lang
+        if not client_lang or client_lang.lower() in ("null", "none", "unknown"):
+            client_lang = dom_lang
+
+        evaluation_obj["language_analysis"] = {
+            "dominant_language": dom_lang,
+            "agent_language": agent_lang,
+            "client_language": client_lang,
+            "explanation": str(lang_analysis.get("explanation") or "")[:200],
+        }
+
+        # Deterministic scan of early turns for Next Education introduction greeting
+        intro_obj = evaluation_obj.get("introduction_check")
+        if not isinstance(intro_obj, dict):
+            intro_obj = {}
+
+        early_segments = segments[:8]
+        found_company = False
+        found_name = None
+        found_quote = None
+
+        company_regex = re.compile(r"\b(next\s*education|next\s*edu)\b", re.IGNORECASE)
+        intro_regex = re.compile(r"\b(?:this\s+is|my\s+name\s+is|i\s+am|speaking\s+is)\s+([a-zA-Z]+)", re.IGNORECASE)
+
+        for s in early_segments:
+            stext = str(s.get("text", "")).strip()
+            s_speaker = s.get("speaker_id")
+            if agent_id and s_speaker and s_speaker != agent_id:
+                continue
+            if not found_company and company_regex.search(stext):
+                found_company = True
+                found_quote = stext
+            m_name = intro_regex.search(stext)
+            if not found_name and m_name:
+                found_name = m_name.group(1).capitalize()
+                if not found_quote:
+                    found_quote = stext
+
+        llm_status = str(intro_obj.get("status") or "").lower()
+        llm_company = bool(intro_obj.get("company_named"))
+        llm_name = intro_obj.get("agent_name_stated")
+        llm_quote = intro_obj.get("greeting_quote")
+
+        final_company = found_company or llm_company
+        final_name = found_name or (str(llm_name).strip() if llm_name and str(llm_name).lower() not in ("null", "none") else None)
+        final_quote = (str(llm_quote).strip() if llm_quote and str(llm_quote).lower() not in ("null", "none") else found_quote)
+
+        if final_company and final_name:
+            final_status = "compliant"
+            final_comp = True
+        elif final_company or final_name or llm_status == "partially_compliant":
+            final_status = "partially_compliant"
+            final_comp = False
+        else:
+            final_status = "non_compliant"
+            final_comp = False
+
+        evaluation_obj["introduction_check"] = {
+            "status": final_status,
+            "compliant": final_comp,
+            "agent_name_stated": final_name,
+            "company_named": final_company,
+            "greeting_quote": final_quote[:300] if final_quote else None,
+            "notes": (
+                "Agent stated name and company affiliation." if final_status == "compliant"
+                else ("Partial introduction identified." if final_status == "partially_compliant"
+                else "No formal Next Education introduction identified.")
+            ),
+        }
 
         scorecard = evaluation_obj.get("scorecard")
         if not isinstance(scorecard, dict):

@@ -83,8 +83,8 @@ Return JSON only.
 # ==============================================================================
 EVAL_MAX_MODEL_LEN = int(os.environ.get("EVAL_MAX_MODEL_LEN", "8192"))
 CHUNK_TEXT_TOKENS = int(os.environ.get("CHUNK_TEXT_TOKENS", "1200"))
-CHUNK_OUTPUT_TOKENS = int(os.environ.get("CHUNK_OUTPUT_TOKENS", "1000"))
-MERGE_OUTPUT_TOKENS = int(os.environ.get("MERGE_OUTPUT_TOKENS", "1200"))
+CHUNK_OUTPUT_TOKENS = int(os.environ.get("CHUNK_OUTPUT_TOKENS", "1400"))
+MERGE_OUTPUT_TOKENS = int(os.environ.get("MERGE_OUTPUT_TOKENS", "1600"))
 MERGE_GROUP_SIZE = 2
 EVAL_MAX_RETRIES = 2
 # Optimized default for 8GB VRAM (allows ~6GB Qwen 2.5 3B fp16 weights + KV cache)
@@ -102,6 +102,20 @@ Return exactly one valid JSON object without Markdown fences.
 EVAL_SCHEMA = """
 Return one JSON object with exactly this structure:
 {
+  "language_analysis": {
+    "agent_language": "string (e.g. English, Hindi, Hinglish, Tamil, Telugu)",
+    "client_language": "string (e.g. English, Hindi, Hinglish, Tamil, Telugu)",
+    "dominant_language": "string (e.g. English, Hindi, Tamil, Telugu)",
+    "explanation": "short string under 15 words"
+  },
+  "introduction_check": {
+    "status": "compliant | partially_compliant | non_compliant",
+    "compliant": true,
+    "agent_name_stated": "string or null",
+    "company_named": true,
+    "greeting_quote": "short string under 20 words or null",
+    "notes": "short string under 15 words"
+  },
   "intent_review": "supported | partially_supported | unclear",
   "client_needs": ["string"],
   "agent_actions": ["string"],
@@ -129,6 +143,18 @@ Return one JSON object with exactly this structure:
   },
   "uncertainties": ["string"]
 }
+
+LANGUAGE ANALYSIS GUIDELINES:
+- Identify the language or dialect used by the agent and client.
+- Identify the dominant language most used throughout the call.
+- Keep language explanation to under 15 words.
+
+INTRODUCTION & GREETING PROTOCOL GUIDELINES:
+- Check the initial turns of the conversation to see if the agent gave the standard company greeting.
+- Check if the agent stated their name ('agent_name_stated') and mentioned the company name ('company_named': true if Next Education or NextEdu was stated, else false).
+- Status is 'compliant' if both agent name and company were stated, 'partially_compliant' if one was stated, or 'non_compliant' if missing.
+- Set 'compliant' to true only if status is 'compliant'.
+- Quote the exact opening greeting in 'greeting_quote' (under 20 words) or null if absent.
 
 SCORING CRITERIA AND DYNAMIC SCORING RUBRIC (Each subscore must be an independent decimal float between 0.0 and 100.0 reflecting the specific recording):
 - Professionalism (0.0 to 100.0):

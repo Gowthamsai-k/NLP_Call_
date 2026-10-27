@@ -1132,6 +1132,8 @@
           <thead>
             <tr>
               <th>Audio File</th>
+              <th>Language</th>
+              <th>Intro Check</th>
               <th>Total Score</th>
               <th>Professionalism</th>
               <th>Respectfulness</th>
@@ -1279,6 +1281,21 @@
             <div class="meta-item">
               <div class="meta-label">Intent Status</div>
               <div class="meta-val" id="metaIntentStatus" style="color: var(--primary);">--</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Dominant Language</div>
+              <div class="meta-val" id="metaDominantLang" style="font-weight: 700; color: var(--slate-800);">--</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Speaker Languages</div>
+              <div class="meta-val" id="metaLangBreakdown" style="font-size: 0.85rem; color: var(--slate-600);">--</div>
+            </div>
+            <div class="meta-item" style="grid-column: 1 / -1; background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 6px; padding: 0.75rem 1rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <span class="meta-label" style="margin-bottom: 0;">Next Education Introduction Greeting Protocol</span>
+                <span id="metaIntroBadge" class="badge badge-resolved">Compliant</span>
+              </div>
+              <div id="metaIntroQuote" style="font-size: 0.85rem; color: var(--slate-700); font-style: italic;">--</div>
             </div>
           </div>
         </div>
@@ -1445,6 +1462,10 @@
             <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Ticket ID:</span><span id="sbQueueVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
             <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Customer:</span><span id="sbPhoneVal" style="font-weight: 600; font-family: monospace; color: var(--slate-800);">--</span></div>
             <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Call Time:</span><span id="sbDateVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Dominant Language:</span><span id="sbDominantLangVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--slate-500);">Languages:</span><span id="sbLangBreakdownVal" style="font-weight: 600; color: var(--slate-800);">--</span></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.35rem; border-top: 1px dashed var(--slate-200);"><span style="color: var(--slate-500);">Intro Protocol:</span><span id="sbIntroBadge" class="badge badge-resolved" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">Compliant</span></div>
+            <div id="sbIntroQuote" style="font-size: 0.78rem; color: var(--slate-600); font-style: italic;">--</div>
           </div>
         </div>
       </div>
@@ -1497,6 +1518,20 @@
       isSample: true,
       data: {
         audio_file: "n_gayathri_nexteducation_in__Support__112__8107336__8805835736__2026-10-22_11-50-43.mp3",
+        language_analysis: {
+          agent_language: "English / Hindi",
+          client_language: "Hindi",
+          dominant_language: "Hindi",
+          explanation: "Conversation primarily in Hindi with technical terms in English."
+        },
+        introduction_check: {
+          compliant: true,
+          status: "compliant",
+          agent_name_stated: "Gayathri",
+          company_named: true,
+          greeting_quote: "Good morning, this is Gayathri from Next Education. How can I help you?",
+          notes: "Agent introduced self and stated company name."
+        },
         intent_review: "supported",
         client_needs: [
           "Customer requested student portal login and account access assistance",
@@ -1989,9 +2024,20 @@
         const res = item.data?.resolution?.status || 'unclear';
         const fname = item.filename || item.data?.audio_file || ('Call #' + (idx + 1));
 
+        const langData = item.data?.language_analysis || {};
+        const domLang = langData.dominant_language || 'English';
+
+        const introData = item.data?.introduction_check || {};
+        const isIntroComp = Boolean(introData.compliant);
+        const introStatus = introData.status || (isIntroComp ? 'compliant' : 'non_compliant');
+        const introClass = isIntroComp ? 'badge-resolved' : (introStatus === 'partially_compliant' ? 'badge-partially_resolved' : 'badge-unresolved');
+        const introText = isIntroComp ? 'Compliant' : (introStatus === 'partially_compliant' ? 'Partial' : 'Missing');
+
         return `
           <tr onclick="selectCallFromTable(${idx})" style="cursor: pointer;" title="Click to open scorecard sidebar">
-            <td><strong>${fname}</strong></td>
+            <td><strong>${escapeHtml(fname)}</strong></td>
+            <td><span style="font-weight: 600; color: var(--slate-700);">${escapeHtml(domLang)}</span></td>
+            <td><span class="badge ${introClass}" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;">${introText}</span></td>
             <td><span style="font-weight: 700; color: var(--primary);">${total}</span></td>
             <td>${prof}</td>
             <td>${resp}</td>
@@ -2120,6 +2166,22 @@
       document.getElementById('sbQueueVal').textContent = meta.queue;
       document.getElementById('sbPhoneVal').textContent = meta.phone;
       document.getElementById('sbDateVal').textContent = meta.dt;
+
+      // Language & Intro Protocol in Sidebar
+      const langData = d.language_analysis || {};
+      const domLang = langData.dominant_language || 'English';
+      const agentLang = langData.agent_language || domLang;
+      const clientLang = langData.client_language || domLang;
+      document.getElementById('sbDominantLangVal').textContent = domLang;
+      document.getElementById('sbLangBreakdownVal').textContent = `Agent: ${agentLang} | Caller: ${clientLang}`;
+
+      const introData = d.introduction_check || {};
+      const isIntroComp = Boolean(introData.compliant);
+      const introStatus = introData.status || (isIntroComp ? 'compliant' : 'non_compliant');
+      const introBadge = document.getElementById('sbIntroBadge');
+      introBadge.className = 'badge ' + (isIntroComp ? 'badge-resolved' : (introStatus === 'partially_compliant' ? 'badge-partially_resolved' : 'badge-unresolved'));
+      introBadge.textContent = isIntroComp ? 'Compliant' : (introStatus === 'partially_compliant' ? 'Partial' : 'Missing Intro');
+      document.getElementById('sbIntroQuote').textContent = introData.greeting_quote ? `"${introData.greeting_quote}"` : (introData.notes || 'No standard introduction spoken.');
 
       // Subscores
       setSidebarSubscore('sbProfVal', 'sbProfBar', 'sbProfRationale', sc.professionalism_score, sc.professionalism_rationale);
@@ -2272,6 +2334,22 @@
       document.getElementById('metaCustomerPhone').textContent = meta.phone;
       document.getElementById('metaCallDate').textContent = meta.dt;
       document.getElementById('metaIntentStatus').textContent = (d.intent_review || 'Supported').toUpperCase();
+
+      // Language & Intro Protocol in Main Metadata Card
+      const langData = d.language_analysis || {};
+      const domLang = langData.dominant_language || 'English';
+      const agentLang = langData.agent_language || domLang;
+      const clientLang = langData.client_language || domLang;
+      document.getElementById('metaDominantLang').textContent = domLang;
+      document.getElementById('metaLangBreakdown').textContent = `Agent: ${agentLang} | Caller: ${clientLang}`;
+
+      const introData = d.introduction_check || {};
+      const isIntroComp = Boolean(introData.compliant);
+      const introStatus = introData.status || (isIntroComp ? 'compliant' : 'non_compliant');
+      const introBadge = document.getElementById('metaIntroBadge');
+      introBadge.className = 'badge ' + (isIntroComp ? 'badge-resolved' : (introStatus === 'partially_compliant' ? 'badge-partially_resolved' : 'badge-unresolved'));
+      introBadge.textContent = isIntroComp ? 'Compliant' : (introStatus === 'partially_compliant' ? 'Partial Intro' : 'Missing Intro');
+      document.getElementById('metaIntroQuote').textContent = introData.greeting_quote ? `"${introData.greeting_quote}"` : (introData.notes || 'No standard introduction spoken.');
 
       // 5. Resolution Outcome & Action Tracker Card Population
       const trackerBadge = document.getElementById('trackerResolutionBadge');
