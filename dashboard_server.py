@@ -34,6 +34,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("dashboard_server")
 
+from src.customer_support_pipeline.storage.database import (
+    query_evaluations_from_db,
+    sync_disk_evaluations_to_db,
+    DEFAULT_DB_FILENAME,
+)
+
 # In-memory Job Management (Thread-safe)
 JOBS = {}
 JOBS_LOCK = threading.Lock()
@@ -411,9 +417,41 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json_response({"error": f"Job {job_id} not found"}, status=404)
             return
 
-        elif path == "/api/results":
+        elif path == "/api/results" or path.startswith("/api/results"):
             out_p = PROJECT_ROOT / "Output" if (PROJECT_ROOT / "Output").exists() else (PROJECT_ROOT / "output")
-            evals = find_existing_evaluations(out_p)
+            db_path = out_p / DEFAULT_DB_FILENAME
+
+            # Parse query params if provided
+            query_params = urllib.parse.parse_qs(parsed.query)
+            agent_filter = query_params.get("agent", [None])[0]
+            res_filter = query_params.get("resolution", [None])[0]
+            lang_filter = query_params.get("language", [None])[0]
+            try:
+                limit_val = int(query_params.get("limit", [5000])[0])
+            except (ValueError, TypeError):
+                limit_val = 5000
+            try:
+                offset_val = int(query_params.get("offset", [0])[0])
+            except (ValueError, TypeError):
+                offset_val = 0
+
+            # If database does not exist yet, sync existing evaluations from disk
+            if not db_path.exists():
+                sync_disk_evaluations_to_db(out_p, db_path)
+
+            evals = query_evaluations_from_db(
+                db_path,
+                limit=limit_val,
+                offset=offset_val,
+                agent=agent_filter,
+                resolution=res_filter,
+                dominant_language=lang_filter,
+            )
+
+            # Fallback if SQLite returned nothing but disk has files
+            if not evals:
+                evals = find_existing_evaluations(out_p)
+
             self.send_json_response(evals)
             return
 
@@ -566,15 +604,25 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 
 def run_server(port: int = 8000, host: str = "0.0.0.0"):
+    out_p = PROJECT_ROOT / "Output" if (PROJECT_ROOT / "Output").exists() else (PROJECT_ROOT / "output")
+    db_p = out_p / DEFAULT_DB_FILENAME
+    if not db_p.exists():
+        logger.info(f"Initializing SQLite index from existing disk evaluations in {out_p.name}...")
+        try:
+            sync_disk_evaluations_to_db(out_p, db_p)
+        except Exception as e:
+            logger.warning(f"Could not auto-sync SQLite index: {e}")
+
     server_address = (host, port)
     httpd = HTTPServer(server_address, DashboardHandler)
     logger.info("=" * 60)
-    logger.info("🚀 Customer Support Scorecard Dashboard running at:")
-    logger.info(f"   👉 http://localhost:{port}")
+    logger.info("Customer Support Scorecard Dashboard running at:")
+    logger.info(f"   http://localhost:{port}")
     if host == "0.0.0.0":
-        logger.info(f"   👉 http://127.0.0.1:{port}")
+        logger.info(f"   http://127.0.0.1:{port}")
     logger.info(f"Static dashboard directory: {PROJECT_ROOT / 'dashboard'}")
-    logger.info(f"Evaluation deliverables:    {PROJECT_ROOT / 'output'}")
+    logger.info(f"Evaluation deliverables:    {out_p}")
+    logger.info(f"SQLite Database:            {db_p}")
     logger.info("=" * 60)
     try:
         httpd.serve_forever()

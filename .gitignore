@@ -29,6 +29,10 @@ share/python-wheels/
 # Outputs, caches, and test runs
 output/
 outputs/
+Output/
+*.db
+*.db-wal
+*.db-shm
 *.wav
 *.mp3
 *.flac
