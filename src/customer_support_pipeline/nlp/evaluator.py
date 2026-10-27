@@ -16,6 +16,7 @@ import torch
 from ..core.config import (
     LLM_MODEL_ID,
     EVAL_MAX_MODEL_LEN,
+    CHUNK_TEXT_TOKENS,
     CHUNK_OUTPUT_TOKENS,
     MERGE_OUTPUT_TOKENS,
     EVAL_MAX_RETRIES,
