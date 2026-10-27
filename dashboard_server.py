@@ -144,7 +144,11 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
             "speaker_id": "SPEAKER_00" if agent_spk else "SPEAKER_01",
             "role": role,
         })
-        curr = round(end_t + 0.5 + float(((seed + int(end_t)) % 3) * 0.4), 1)
+        # Inject natural cross-talk overlaps (where speakers speak simultaneously)
+        if len(synth_turns) % 4 == 2 and (end_t - curr) > 3.0:
+            curr = max(0.2, round(end_t - 1.5 - float((seed % 5) * 0.2), 1))
+        else:
+            curr = round(end_t + 0.5 + float(((seed + int(end_t)) % 3) * 0.4), 1)
         agent_spk = not agent_spk
 
     total_speech = agent_talk + client_talk

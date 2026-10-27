@@ -1144,10 +1144,50 @@
         <span id="summaryToggleIcon" style="font-size: 0.9rem; color: var(--slate-500);">[Hide Table]</span>
       </div>
       <div class="card-body" id="summaryTableBody" style="padding: 0;">
+        <!-- Dynamic Filter Toolbar -->
+        <div id="tableFilterToolbar" style="padding: 0.75rem 1rem; background: var(--slate-50); border-bottom: 1px solid var(--slate-200); display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between;">
+          <div style="display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; flex: 1;">
+            <!-- Filter by Resolution Status -->
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <label for="filterResolution" style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Resolution:</label>
+              <select id="filterResolution" onchange="applyCallFilters()" style="font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none;">
+                <option value="all">All Resolutions</option>
+                <option value="resolved">Resolved</option>
+                <option value="partially_resolved">Partially Resolved</option>
+                <option value="unresolved">Unresolved</option>
+                <option value="pending_follow_up">Pending Follow-up</option>
+                <option value="unclear">Unclear</option>
+              </select>
+            </div>
+
+            <!-- Filter by Executive Name -->
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <label for="filterAgent" style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Executive:</label>
+              <select id="filterAgent" onchange="applyCallFilters()" style="font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none; max-width: 220px;">
+                <option value="all">All Support Executives</option>
+              </select>
+            </div>
+
+            <!-- Text Search Filter -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; flex: 1; min-width: 170px; max-width: 280px;">
+              <input type="text" id="filterSearch" placeholder="Search file, agent, phone..." oninput="applyCallFilters()" style="width: 100%; font-size: 0.8rem; padding: 0.3rem 0.55rem; border: 1px solid var(--slate-300); border-radius: 4px; background: white; color: var(--slate-800); outline: none;">
+            </div>
+
+            <!-- Reset Filter Button -->
+            <button type="button" id="resetFiltersBtn" onclick="resetCallFilters()" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; display: none;">Reset Filters</button>
+          </div>
+
+          <!-- Counter display -->
+          <div id="filterCountBadge" style="font-size: 0.78rem; font-weight: 600; color: var(--slate-500); white-space: nowrap;">
+            Showing 0 of 0 calls
+          </div>
+        </div>
+
         <table class="summary-table">
           <thead>
             <tr>
               <th>Audio File</th>
+              <th>Executive</th>
               <th>Language</th>
               <th>Intro Check</th>
               <th>Total Score</th>
@@ -1257,16 +1297,18 @@
               <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Speaker Diarization Timeline</span>
               <span style="font-size: 0.75rem; color: #64748b; margin-left: 0.4rem;">PyAnnote acoustic turn sequence</span>
             </div>
-            <div id="heroTimelineStats" style="display: flex; gap: 0.75rem; font-size: 0.78rem; font-family: monospace;">
+            <div id="heroTimelineStats" style="display: flex; gap: 0.75rem; font-size: 0.78rem; font-family: monospace; align-items: center; flex-wrap: wrap;">
               <span style="color: #38bdf8;">Agent: <strong id="heroAgentTalkStat">--%</strong></span>
               <span style="color: #64748b;">|</span>
               <span style="color: #93c5fd;">Caller: <strong id="heroClientTalkStat">--%</strong></span>
+              <span style="color: #64748b;">|</span>
+              <span style="color: #fbbf24;">Overlaps: <strong id="heroOverlapStat">0 (0.0s)</strong></span>
               <span style="color: #64748b;">|</span>
               <span style="color: #e2e8f0;">Duration: <strong id="heroDurationStat">--</strong></span>
             </div>
           </div>
 
-          <!-- Dual-Track Visual Timeline -->
+          <!-- Multi-Track Visual Timeline -->
           <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 0.85rem 1rem;">
             <!-- Agent Track -->
             <div style="display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.5rem;">
@@ -1278,6 +1320,12 @@
             <div style="display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.5rem;">
               <span style="font-size: 0.72rem; font-weight: 600; color: #93c5fd; width: 55px; text-align: right; flex-shrink: 0;">Caller</span>
               <div class="timeline-track-bar" id="heroClientTrack" style="flex: 1; height: 16px; background: rgba(255,255,255,0.06); border-radius: 3px; position: relative; overflow: hidden;"></div>
+            </div>
+
+            <!-- Overlap / Cross-talk Track -->
+            <div style="display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.5rem;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #fbbf24; width: 55px; text-align: right; flex-shrink: 0;">Overlap</span>
+              <div class="timeline-track-bar" id="heroOverlapTrack" style="flex: 1; height: 16px; background: rgba(255,255,255,0.06); border-radius: 3px; position: relative; overflow: hidden;"></div>
             </div>
 
             <!-- Time Axis Ticks -->
@@ -1476,17 +1524,19 @@
         <div class="card-body" style="padding: 0.75rem 0.9rem;">
           <!-- Talk Ratio Progress Bar -->
           <div style="margin-bottom: 0.65rem;">
-            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.73rem; font-weight: 600; margin-bottom: 0.25rem; flex-wrap: wrap; gap: 0.35rem;">
               <span style="color: var(--primary);">Agent: <span id="sbAgentRatio">--%</span></span>
+              <span style="color: #d97706;">Overlaps: <span id="sbOverlapRatio">0 (0.0s)</span></span>
               <span style="color: #0284c7;">Caller: <span id="sbClientRatio">--%</span></span>
             </div>
             <div style="height: 6px; border-radius: 9999px; display: flex; overflow: hidden; background: var(--slate-100);">
               <div id="sbRatioAgentBar" style="background: var(--primary); width: 50%;"></div>
+              <div id="sbRatioOverlapBar" style="background: #f59e0b; width: 0%;"></div>
               <div id="sbRatioClientBar" style="background: #0284c7; width: 50%;"></div>
             </div>
           </div>
 
-          <!-- Dual-Track Timeline in Sidebar -->
+          <!-- Multi-Track Timeline in Sidebar -->
           <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 6px; padding: 0.65rem 0.75rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
               <span style="font-size: 0.7rem; font-weight: 600; color: var(--primary); width: 45px; text-align: right; flex-shrink: 0;">Agent</span>
@@ -1495,6 +1545,10 @@
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
               <span style="font-size: 0.7rem; font-weight: 600; color: #0284c7; width: 45px; text-align: right; flex-shrink: 0;">Caller</span>
               <div class="timeline-track-bar" id="sbClientTrack" style="flex: 1; height: 14px; background: var(--slate-200); border-radius: 3px; position: relative; overflow: hidden;"></div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+              <span style="font-size: 0.7rem; font-weight: 600; color: #d97706; width: 45px; text-align: right; flex-shrink: 0;">Overlap</span>
+              <div class="timeline-track-bar" id="sbOverlapTrack" style="flex: 1; height: 14px; background: var(--slate-200); border-radius: 3px; position: relative; overflow: hidden;"></div>
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span style="width: 45px; flex-shrink: 0;"></span>
@@ -2117,10 +2171,11 @@
       emptyState.style.display = 'none';
       resultsArea.style.display = 'block';
 
-      // Always populate and show summary overview table when evaluations are present
+      // Always populate and show summary overview table with dynamic filters
       if (summaryCard) {
         summaryCard.style.display = 'block';
-        populateSummaryTable();
+        populateAgentFilterOptions();
+        applyCallFilters();
       }
 
       // Render the currently selected call in BOTH main scorecard and side dashboard drawer
@@ -2132,19 +2187,101 @@
       updateSidebarNavButtons();
     }
 
-    function populateSummaryTable() {
+    // Dynamic Filter Functions for Overview Table
+    function populateAgentFilterOptions() {
+      const select = document.getElementById('filterAgent');
+      if (!select) return;
+      const prevVal = select.value || 'all';
+
+      const agentSet = new Set();
+      evaluations.forEach(item => {
+        const meta = parseCallMetadata(item.filename || item.data?.audio_file);
+        if (meta && meta.agent) {
+          agentSet.add(meta.agent);
+        }
+      });
+
+      const agents = Array.from(agentSet).sort();
+      let html = '<option value="all">All Support Executives</option>';
+      agents.forEach(ag => {
+        html += `<option value="${escapeHtml(ag)}">${escapeHtml(ag)}</option>`;
+      });
+      select.innerHTML = html;
+      if (agents.includes(prevVal)) {
+        select.value = prevVal;
+      } else {
+        select.value = 'all';
+      }
+    }
+
+    function applyCallFilters() {
+      const resSelect = document.getElementById('filterResolution');
+      const agentSelect = document.getElementById('filterAgent');
+      const searchInput = document.getElementById('filterSearch');
+      const resetBtn = document.getElementById('resetFiltersBtn');
+      const countBadge = document.getElementById('filterCountBadge');
+      const summaryTotal = document.getElementById('summaryTotalCount');
       const tbody = document.getElementById('summaryTableRows');
       if (!tbody) return;
-      document.getElementById('summaryTotalCount').textContent = evaluations.length;
 
-      tbody.innerHTML = evaluations.map((item, idx) => {
+      const resVal = resSelect ? resSelect.value : 'all';
+      const agentVal = agentSelect ? agentSelect.value : 'all';
+      const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+      const isFiltered = (resVal !== 'all' || agentVal !== 'all' || searchVal !== '');
+      if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-block' : 'none';
+
+      const totalCalls = evaluations.length;
+      if (summaryTotal) summaryTotal.textContent = totalCalls;
+
+      const filtered = [];
+      evaluations.forEach((item, originalIndex) => {
+        const res = item.data?.resolution?.status || 'unclear';
+        if (resVal !== 'all' && res !== resVal) return;
+
+        const meta = parseCallMetadata(item.filename || item.data?.audio_file);
+        if (agentVal !== 'all' && meta.agent !== agentVal) return;
+
+        if (searchVal) {
+          const fname = (item.filename || item.data?.audio_file || '').toLowerCase();
+          const ag = (meta.agent || '').toLowerCase();
+          const ph = (meta.phone || '').toLowerCase();
+          const lang = (item.data?.language_analysis?.dominant_language || '').toLowerCase();
+          const combined = `${fname} ${ag} ${ph} ${lang} ${res}`;
+          if (!combined.includes(searchVal)) return;
+        }
+
+        filtered.push({ item, originalIndex, meta });
+      });
+
+      if (countBadge) {
+        if (isFiltered) {
+          countBadge.textContent = `Showing ${filtered.length} of ${totalCalls} calls`;
+        } else {
+          countBadge.textContent = `Showing all ${totalCalls} calls`;
+        }
+      }
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" style="text-align: center; padding: 2rem; color: var(--slate-500);">
+              No calls match the selected filters.
+              <button class="btn btn-secondary" style="margin-left: 0.5rem; padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="resetCallFilters()">Reset Filters</button>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(({ item, originalIndex, meta }) => {
         const sc = item.data?.scorecard || {};
         const total = sc.total_score != null ? sc.total_score.toFixed(1) : '-';
         const prof = sc.professionalism_score != null ? sc.professionalism_score.toFixed(1) : '-';
         const resp = sc.respectfulness_score != null ? sc.respectfulness_score.toFixed(1) : '-';
         const pol = sc.politeness_score != null ? sc.politeness_score.toFixed(1) : '-';
         const res = item.data?.resolution?.status || 'unclear';
-        const fname = item.filename || item.data?.audio_file || ('Call #' + (idx + 1));
+        const fname = item.filename || item.data?.audio_file || ('Call #' + (originalIndex + 1));
 
         const langData = item.data?.language_analysis || {};
         const domLang = langData.dominant_language || 'English';
@@ -2155,9 +2292,13 @@
         const introClass = isIntroComp ? 'badge-resolved' : (introStatus === 'partially_compliant' ? 'badge-partially_resolved' : 'badge-unresolved');
         const introText = isIntroComp ? 'Compliant' : (introStatus === 'partially_compliant' ? 'Partial' : 'Missing');
 
+        const isSelected = originalIndex === selectedCallIndex;
+        const rowStyle = isSelected ? 'background-color: #eff6ff; font-weight: 500;' : '';
+
         return `
-          <tr onclick="selectCallFromTable(${idx})" style="cursor: pointer;" title="Click to open scorecard sidebar">
+          <tr onclick="selectCallFromTable(${originalIndex})" style="cursor: pointer; ${rowStyle}" title="Click to inspect this call">
             <td><strong>${escapeHtml(fname)}</strong></td>
+            <td><span style="font-weight: 600; color: var(--slate-700);">${escapeHtml(meta.agent)}</span></td>
             <td><span style="font-weight: 600; color: var(--slate-700);">${escapeHtml(domLang)}</span></td>
             <td><span class="badge ${introClass}" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;">${introText}</span></td>
             <td><span style="font-weight: 700; color: var(--primary);">${total}</span></td>
@@ -2165,16 +2306,32 @@
             <td>${resp}</td>
             <td>${pol}</td>
             <td><span class="badge badge-${res}">${res}</span></td>
-            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCallFromTable(${idx})">Inspect</button></td>
+            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCallFromTable(${originalIndex})">Inspect</button></td>
           </tr>
         `;
       }).join('');
+    }
+
+    function resetCallFilters() {
+      const resSelect = document.getElementById('filterResolution');
+      const agentSelect = document.getElementById('filterAgent');
+      const searchInput = document.getElementById('filterSearch');
+      if (resSelect) resSelect.value = 'all';
+      if (agentSelect) agentSelect.value = 'all';
+      if (searchInput) searchInput.value = '';
+      applyCallFilters();
+    }
+
+    function populateSummaryTable() {
+      populateAgentFilterOptions();
+      applyCallFilters();
     }
 
     function selectCallFromTable(idx) {
       selectedCallIndex = idx;
       renderSingleScorecard(evaluations[selectedCallIndex]);
       openSidebar(idx);
+      applyCallFilters();
     }
 
     // SIDEBAR DRAWER CONTROLS
@@ -2205,6 +2362,7 @@
         renderSidebarContent(evaluations[selectedCallIndex]);
         renderSingleScorecard(evaluations[selectedCallIndex]);
         updateSidebarNavButtons();
+        applyCallFilters();
       }
     }
 
@@ -2215,6 +2373,7 @@
         renderSidebarContent(evaluations[selectedCallIndex]);
         renderSingleScorecard(evaluations[selectedCallIndex]);
         updateSidebarNavButtons();
+        applyCallFilters();
       }
     }
 
@@ -2521,6 +2680,70 @@
       return m + ':' + (s < 10 ? '0' : '') + s;
     }
 
+    // Compute simultaneous cross-talk speech overlap intervals between Agent and Caller
+    function computeOverlapIntervals(turns, agentSpeakerId) {
+      if (!Array.isArray(turns) || turns.length === 0) {
+        return { overlaps: [], count: 0, totalDuration: 0 };
+      }
+
+      const agentIntervals = [];
+      const clientIntervals = [];
+
+      turns.forEach(t => {
+        const st = Number(t.start) || 0;
+        const en = Number(t.end) || st;
+        if (en > st) {
+          const role = t.role || (agentSpeakerId && t.speaker_id === agentSpeakerId ? 'agent' : 'client');
+          if (role === 'agent') {
+            agentIntervals.push({ start: st, end: en });
+          } else {
+            clientIntervals.push({ start: st, end: en });
+          }
+        }
+      });
+
+      const rawOverlaps = [];
+      for (const a of agentIntervals) {
+        for (const c of clientIntervals) {
+          const oStart = Math.max(a.start, c.start);
+          const oEnd = Math.min(a.end, c.end);
+          if (oEnd - oStart >= 0.15) {
+            rawOverlaps.push({ start: oStart, end: oEnd });
+          }
+        }
+      }
+
+      if (rawOverlaps.length === 0) {
+        return { overlaps: [], count: 0, totalDuration: 0 };
+      }
+
+      rawOverlaps.sort((x, y) => x.start - y.start);
+
+      // Merge contiguous or overlapping intervals
+      const merged = [rawOverlaps[0]];
+      for (let i = 1; i < rawOverlaps.length; i++) {
+        const cur = rawOverlaps[i];
+        const last = merged[merged.length - 1];
+        if (cur.start <= last.end + 0.1) {
+          last.end = Math.max(last.end, cur.end);
+        } else {
+          merged.push(cur);
+        }
+      }
+
+      let totalSec = 0;
+      merged.forEach(m => {
+        m.dur = Math.round((m.end - m.start) * 10) / 10;
+        totalSec += m.dur;
+      });
+
+      return {
+        overlaps: merged,
+        count: merged.length,
+        totalDuration: Math.round(totalSec * 10) / 10
+      };
+    }
+
     function generateFallbackDiarizationTimeline(d) {
       const fname = d.audio_file || 'customer_call.mp3';
       let seed = 0;
@@ -2549,7 +2772,13 @@
           speaker_id: isAgent ? 'SPEAKER_00' : 'SPEAKER_01',
           role: role
         });
-        curr = Math.round((endT + 0.4 + (((seed + Math.floor(endT)) % 3) * 0.3)) * 10) / 10;
+
+        // Naturally inject 2 to 3 cross-talk overlaps per call to visualize diarization overlap
+        if (synthTurns.length % 4 === 2 && (endT - curr) > 3.0) {
+          curr = Math.max(0.2, Math.round((endT - 1.6 - ((seed % 5) * 0.2)) * 10) / 10);
+        } else {
+          curr = Math.round((endT + 0.4 + (((seed + Math.floor(endT)) % 3) * 0.3)) * 10) / 10;
+        }
         isAgent = !isAgent;
       }
 
@@ -2589,11 +2818,19 @@
       const clientPct = dt.client_talk_ratio_pct != null ? Number(dt.client_talk_ratio_pct).toFixed(1) : '50.0';
       const durStr = formatClock(totalDur);
 
+      // Compute Overlaps / Cross-talk
+      const overlapData = computeOverlapIntervals(turns, dt.agent_speaker_id);
+      const overlapCount = overlapData.count;
+      const totalOverlapDur = overlapData.totalDuration;
+      const overlaps = overlapData.overlaps;
+
       // Hero Stats
       const hAgentStat = document.getElementById('heroAgentTalkStat');
       if (hAgentStat) hAgentStat.textContent = agentPct + '%';
       const hClientStat = document.getElementById('heroClientTalkStat');
       if (hClientStat) hClientStat.textContent = clientPct + '%';
+      const hOverlapStat = document.getElementById('heroOverlapStat');
+      if (hOverlapStat) hOverlapStat.textContent = `${overlapCount} (${totalOverlapDur.toFixed(1)}s)`;
       const hDurStat = document.getElementById('heroDurationStat');
       if (hDurStat) hDurStat.textContent = durStr;
 
@@ -2602,12 +2839,23 @@
       if (sbAgentRatio) sbAgentRatio.textContent = agentPct + '%';
       const sbClientRatio = document.getElementById('sbClientRatio');
       if (sbClientRatio) sbClientRatio.textContent = clientPct + '%';
+      const sbOverlapRatio = document.getElementById('sbOverlapRatio');
+      if (sbOverlapRatio) sbOverlapRatio.textContent = `${overlapCount} (${totalOverlapDur.toFixed(1)}s)`;
+
       const sbBarAgent = document.getElementById('sbRatioAgentBar');
       if (sbBarAgent) sbBarAgent.style.width = agentPct + '%';
       const sbBarClient = document.getElementById('sbRatioClientBar');
       if (sbBarClient) sbBarClient.style.width = clientPct + '%';
+      const sbBarOverlap = document.getElementById('sbRatioOverlapBar');
+      if (sbBarOverlap && totalDur > 0) {
+        const ovPct = Math.min(30, (totalOverlapDur / totalDur) * 100);
+        sbBarOverlap.style.width = ovPct + '%';
+      }
+
       const sbDur = document.getElementById('sbTimelineDuration');
-      if (sbDur) sbDur.textContent = durStr + ' (' + turns.length + ' turns)';
+      if (sbDur) {
+        sbDur.textContent = `${durStr} (${turns.length} turns, ${overlapCount} overlaps)`;
+      }
 
       // Axis Ticks
       const tickStep = totalDur > 180 ? 60 : (totalDur > 60 ? 30 : 15);
@@ -2639,26 +2887,55 @@
         const leftPct = Math.max(0, Math.min(100, (st / totalDur) * 100));
         const widthPct = Math.max(0.6, Math.min(100 - leftPct, (dur / totalDur) * 100));
         const role = t.role || (t.speaker_id === dt.agent_speaker_id ? 'agent' : 'client');
-        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${role === 'agent' ? 'Support Executive' : 'Customer'}: ${dur.toFixed(1)}s turn`;
+        
+        // Highlight turns with simultaneous speech
+        const hasOverlap = overlaps.some(ov => Math.max(st, ov.start) < Math.min(en, ov.end));
+        const overlapNotice = hasOverlap ? ' [Overlapped with simultaneous speech]' : '';
+        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${role === 'agent' ? 'Support Executive' : 'Customer'}: ${dur.toFixed(1)}s turn${overlapNotice}`;
 
         if (role === 'agent') {
-          hAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #38bdf8; border: 1px solid rgba(255,255,255,0.25);" title="${escapeHtml(tooltip)}"></div>`;
-          sbAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: var(--primary);" title="${escapeHtml(tooltip)}"></div>`;
+          const overlapStyle = hasOverlap ? 'border-top: 2px solid #fbbf24; border-bottom: 2px solid #fbbf24;' : 'border: 1px solid rgba(255,255,255,0.25);';
+          const sbOverlapStyle = hasOverlap ? 'border-top: 2px solid #f59e0b; border-bottom: 2px solid #f59e0b;' : '';
+          hAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #38bdf8; ${overlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
+          sbAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: var(--primary); ${sbOverlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
         } else {
-          hClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #93c5fd; border: 1px solid rgba(255,255,255,0.25);" title="${escapeHtml(tooltip)}"></div>`;
-          sbClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #0284c7;" title="${escapeHtml(tooltip)}"></div>`;
+          const overlapStyle = hasOverlap ? 'border-top: 2px solid #fbbf24; border-bottom: 2px solid #fbbf24;' : 'border: 1px solid rgba(255,255,255,0.25);';
+          const sbOverlapStyle = hasOverlap ? 'border-top: 2px solid #f59e0b; border-bottom: 2px solid #f59e0b;' : '';
+          hClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #93c5fd; ${overlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
+          sbClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #0284c7; ${sbOverlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
         }
+      });
+
+      // Build Overlap Track Blocks
+      let hOverlapHtml = '';
+      let sbOverlapHtml = '';
+
+      overlaps.forEach(ov => {
+        const st = ov.start;
+        const en = ov.end;
+        const dur = ov.dur;
+        const leftPct = Math.max(0, Math.min(100, (st / totalDur) * 100));
+        const widthPct = Math.max(0.8, Math.min(100 - leftPct, (dur / totalDur) * 100));
+        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] Cross-talk Overlap: ${dur.toFixed(1)}s (Simultaneous speech)`;
+
+        hOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #fbbf24; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);" title="${escapeHtml(tooltip)}"></div>`;
+        sbOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #d97706;" title="${escapeHtml(tooltip)}"></div>`;
       });
 
       const heroAgentTrack = document.getElementById('heroAgentTrack');
       const heroClientTrack = document.getElementById('heroClientTrack');
+      const heroOverlapTrack = document.getElementById('heroOverlapTrack');
       const sbAgentTrack = document.getElementById('sbAgentTrack');
       const sbClientTrack = document.getElementById('sbClientTrack');
+      const sbOverlapTrack = document.getElementById('sbOverlapTrack');
 
       if (heroAgentTrack) heroAgentTrack.innerHTML = hAgentHtml;
       if (heroClientTrack) heroClientTrack.innerHTML = hClientHtml;
+      if (heroOverlapTrack) heroOverlapTrack.innerHTML = hOverlapHtml || '<span style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 0.65rem; color: #64748b;">No speech overlap detected</span>';
+
       if (sbAgentTrack) sbAgentTrack.innerHTML = sbAgentHtml;
       if (sbClientTrack) sbClientTrack.innerHTML = sbClientHtml;
+      if (sbOverlapTrack) sbOverlapTrack.innerHTML = sbOverlapHtml || '<span style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 0.65rem; color: #94a3b8;">No speech overlap detected</span>';
     }
 
     function downloadCurrentEvaluationJson() {
