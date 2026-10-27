@@ -21,8 +21,8 @@ TARGET_SR = 16000
 MIN_TURN_DURATION_S = 0.1
 SILENCE_THRESHOLD = 1e-5
 
-# Indic-Conformer ASR Configuration (IN-22 Languages)
-ASR_LANG = os.environ.get("ASR_LANG", "en")  # Default to 'en' (English), supports 'ta', 'hi', 'te', 'kn', etc.
+# Indic-Conformer / Whisper ASR Configuration (IN-22 Languages)
+ASR_LANG = os.environ.get("ASR_LANG", "auto")  # 'auto' enables dynamic multi-lingual detection per turn/batch; supports 'hi', 'te', 'ta', 'en', etc.
 ASR_DECODER = os.environ.get("ASR_DECODER", "ctc")  # 'ctc' or 'rnnt' 
 
 WHISPER_MAX_MODEL_LEN = 448

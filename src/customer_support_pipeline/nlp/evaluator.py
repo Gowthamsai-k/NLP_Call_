@@ -705,25 +705,33 @@ RULES:
             )
             evaluation_obj["uncertainties"] = list(dict.fromkeys(evaluation_obj["uncertainties"]))
 
-        # Sanitize and validate language_analysis
+        # Determine language breakdown dynamically from turn segments and LLM
+        from ..asr.language_detector import aggregate_speaker_languages
+        dynamic_lang = aggregate_speaker_languages(segments, agent_id, client_id)
+
         lang_analysis = evaluation_obj.get("language_analysis")
         if not isinstance(lang_analysis, dict):
             lang_analysis = {}
         dom_lang = str(lang_analysis.get("dominant_language") or "").strip()
         agent_lang = str(lang_analysis.get("agent_language") or "").strip()
         client_lang = str(lang_analysis.get("client_language") or "").strip()
+
         if not dom_lang or dom_lang.lower() in ("null", "none", "unknown"):
-            dom_lang = "English"
+            dom_lang = dynamic_lang["dominant_language"]
         if not agent_lang or agent_lang.lower() in ("null", "none", "unknown"):
-            agent_lang = dom_lang
+            agent_lang = dynamic_lang["agent_language"]
         if not client_lang or client_lang.lower() in ("null", "none", "unknown"):
-            client_lang = dom_lang
+            client_lang = dynamic_lang["client_language"]
+
+        explanation = dynamic_lang["explanation"]
+        if lang_analysis.get("explanation"):
+            explanation = f"{dynamic_lang['explanation']} - {lang_analysis['explanation'][:80]}"
 
         evaluation_obj["language_analysis"] = {
             "dominant_language": dom_lang,
             "agent_language": agent_lang,
             "client_language": client_lang,
-            "explanation": str(lang_analysis.get("explanation") or "")[:200],
+            "explanation": str(explanation)[:250],
         }
 
         # Deterministic scan of early turns for Next Education introduction greeting

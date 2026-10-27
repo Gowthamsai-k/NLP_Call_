@@ -62,6 +62,7 @@ def align_speakers_with_transcript(
             "speaker_match_confidence": round(confidence, 3),
             "text": seg["text"],
             "raw_text": seg.get("raw_text", seg["text"]),
+            "language": seg.get("language", "English"),
             "words": seg.get("words", [])
         })
 

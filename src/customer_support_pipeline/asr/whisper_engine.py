@@ -24,6 +24,7 @@ from ..core.config import (
 )
 from ..audio.preprocessor import load_and_resample_audio, slice_turn_audio
 from ..core.memory import release_memory, log_vram
+from .language_detector import detect_audio_chunk_language, detect_text_language, resolve_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -189,13 +190,19 @@ def run_transcription(
             if turn_audio is None:
                 continue
 
+            # Dynamically determine language for the turn when auto-detection or multilingual decoding is active
+            active_lang = lang_code
+            if lang_code in ("auto", "multilingual", None):
+                active_lang = detect_audio_chunk_language(turn_audio, samplerate, existing_model or model_bundle)
+
             text = ""
             try:
                 if indic_model is not None:
                     # Convert float32 numpy array to torch tensor (1, samples)
                     wav_tensor = torch.from_numpy(turn_audio).unsqueeze(0).to(device)
                     with torch.no_grad():
-                        pred = indic_model(wav_tensor, lang_code, decoder_type)
+                        target_lang = active_lang if active_lang not in ("auto", "multilingual", None) else "en"
+                        pred = indic_model(wav_tensor, target_lang, decoder_type)
                     if isinstance(pred, (list, tuple)):
                         text = pred[0].strip() if pred else ""
                     else:
@@ -209,12 +216,15 @@ def run_transcription(
                                 "audio": (turn_audio, samplerate),
                             },
                         },
-                        "decoder_prompt": "<|startoftranscript|>",
+                        "decoder_prompt": f"<|startoftranscript|><|{active_lang}|><|transcribe|>" if active_lang and active_lang != "auto" else "<|startoftranscript|>",
                     }
                     outputs = vllm_llm.generate([inputs], sampling_params=sampling_params, use_tqdm=False)
                     text = outputs[0].outputs[0].text.strip()
                 elif whisper_pipe is not None:
-                    hf_res = whisper_pipe({"raw": turn_audio, "sampling_rate": samplerate})
+                    gen_kwargs = {"task": "transcribe"}
+                    if active_lang and active_lang not in ("auto", "multilingual", None):
+                        gen_kwargs["language"] = active_lang
+                    hf_res = whisper_pipe({"raw": turn_audio, "sampling_rate": samplerate}, generate_kwargs=gen_kwargs)
                     text = hf_res.get("text", "").strip()
 
             except Exception as exc:
@@ -227,12 +237,18 @@ def run_transcription(
             if not text:
                 continue
 
+            # Refine detected language via text script analysis (Devanagari, Telugu, Tamil, Latin, etc.)
+            refined_lang_code = detect_text_language(text) if (not active_lang or active_lang == "auto") else active_lang
+            turn_lang_name = resolve_language_name(refined_lang_code)
+
             item = {
                 "start": round(start_time, 3),
                 "end": round(end_time, 3),
                 "speaker": str(speaker),
                 "text": text,
                 "raw_text": text,
+                "language": turn_lang_name,
+                "language_code": refined_lang_code,
                 "words": [],
             }
             transcript_segments.append(item)
