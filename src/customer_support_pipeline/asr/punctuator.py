@@ -8,7 +8,7 @@ import logging
 import importlib.util
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 
 from huggingface_hub import hf_hub_download
 
