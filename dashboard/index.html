@@ -1026,10 +1026,10 @@
       <div class="card-body">
         <!-- Tabs -->
         <div class="tabs-nav">
-          <button class="tab-btn active" onclick="switchTab('single')">Single Audio</button>
-          <button class="tab-btn" onclick="switchTab('folder')">Folder of Calls</button>
-          <button class="tab-btn" onclick="switchTab('zip')">ZIP Archive</button>
-          <button class="tab-btn" onclick="switchTab('json')">View Existing Score (.json)</button>
+          <button class="tab-btn active" onclick="switchTab('single', this)">Single Audio</button>
+          <button class="tab-btn" onclick="switchTab('folder', this)">Folder of Calls</button>
+          <button class="tab-btn" onclick="switchTab('zip', this)">ZIP Archive</button>
+          <button class="tab-btn" onclick="switchTab('json', this)">View Existing Score (.json)</button>
         </div>
 
         <!-- Single File Tab -->
@@ -1481,28 +1481,96 @@
         });
     }
 
+    // Default illustrative evaluation shown when no calls have been evaluated yet
+    const defaultSampleEvaluation = {
+      id: "sample_call_preview",
+      filename: "sample_call_preview.mp3",
+      isSample: true,
+      data: {
+        audio_file: "sample_call_preview.mp3",
+        intent_review: "supported",
+        client_needs: [
+          "Customer requested student portal login and account access assistance",
+          "Customer needed syllabus activation guidance for academic session 2026-27"
+        ],
+        agent_actions: [
+          "Agent greeted customer respectfully and verified student credentials",
+          "Agent provided step-by-step guidance to reset password via registered mobile SMS",
+          "Agent confirmed course syllabus activation and provided ticket reference number"
+        ],
+        resolution: {
+          status: "resolved",
+          explanation: "Customer successfully logged in, verified syllabus courses, and confirmed issue was resolved."
+        },
+        scorecard: {
+          total_score: 92.0,
+          professionalism_score: 94.0,
+          respectfulness_score: 91.0,
+          politeness_score: 91.0,
+          professionalism_rationale: "Exemplary problem understanding, structured guidance, and prompt verification.",
+          respectfulness_rationale: "Demonstrated active listening, patient tone, and addressed all customer queries.",
+          politeness_rationale: "Courteous greeting, respectful tone throughout the call, and formal closing sign-off.",
+          evidence: [
+            {
+              timestamp: "00:12 - 00:25",
+              speaker_id: "SPEAKER_00",
+              category: "politeness",
+              quote: "Good morning, welcome to Next Education Support. My name is Gayathri, how may I assist you today?",
+              interpretation: "Courteous and professional greeting."
+            },
+            {
+              timestamp: "01:05 - 01:28",
+              speaker_id: "SPEAKER_00",
+              category: "professionalism",
+              quote: "I have verified your account and sent a password reset link to your registered mobile number.",
+              interpretation: "Direct problem solving and effective structured guidance."
+            },
+            {
+              timestamp: "02:40 - 02:55",
+              speaker_id: "SPEAKER_00",
+              category: "respectfulness",
+              quote: "You are welcome. Is there anything else I can assist you with today? Have a wonderful day ahead.",
+              interpretation: "Polite and respectful closing."
+            }
+          ]
+        },
+        uncertainties: []
+      }
+    };
+
     function fetchExistingResults() {
       fetch('/api/results')
         .then(res => res.json())
         .then(items => {
           if (Array.isArray(items) && items.length > 0) {
             evaluations = items;
-            renderEvaluations();
+          } else if (evaluations.length === 0) {
+            // Load preview sample so details and scores are visible immediately
+            evaluations = [defaultSampleEvaluation];
           }
+          renderEvaluations();
         })
         .catch(() => {
-          // If no backend endpoint, check if sample is available
+          if (evaluations.length === 0) {
+            evaluations = [defaultSampleEvaluation];
+            renderEvaluations();
+          }
         });
     }
 
     // Tabs
-    function switchTab(mode) {
+    function switchTab(mode, btnEl) {
       currentMode = mode;
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
 
-      event.target.classList.add('active');
-      document.getElementById('tab-' + mode).classList.add('active');
+      if (btnEl) {
+        btnEl.classList.add('active');
+      } else if (window.event && window.event.target) {
+        window.event.target.classList.add('active');
+      }
+      const pane = document.getElementById('tab-' + mode);
+      if (pane) pane.classList.add('active');
     }
 
     // Dropzone & File Handling
@@ -1549,6 +1617,9 @@
           reader.onload = (e) => {
             try {
               const data = JSON.parse(e.target.result);
+              if (evaluations.length === 1 && evaluations[0].isSample) {
+                evaluations = [];
+              }
               evaluations.push({
                 id: 'eval-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
                 filename: file.name.replace(/\.json$/i, ""),
@@ -1735,6 +1806,10 @@
           if (Array.isArray(job.evaluations) && job.evaluations.length > 0) {
             let changed = false;
             job.evaluations.forEach(ev => {
+              if (evaluations.length === 1 && evaluations[0].isSample) {
+                evaluations = [];
+                changed = true;
+              }
               const idx = evaluations.findIndex(e => e.filename === ev.filename || e.id === ev.id);
               if (idx >= 0) {
                 evaluations[idx] = ev;
