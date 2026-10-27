@@ -464,6 +464,56 @@ def process_batch_by_stages(
                     eval_data = json.load(f)
                 if isinstance(eval_data, dict):
                     eval_data["audio_file"] = fname
+                    # Guarantee diarization_timeline is saved before intermediate cleanup
+                    dt = eval_data.get("diarization_timeline")
+                    if not dt or not dt.get("turns"):
+                        try:
+                            segments = []
+                            if ctx["metadata_p"].exists():
+                                with ctx["metadata_p"].open("r", encoding="utf-8") as mf:
+                                    segments = json.load(mf).get("segments") or []
+                            elif ctx["final_transcript_p"].exists():
+                                with ctx["final_transcript_p"].open("r", encoding="utf-8") as tf:
+                                    segments = json.load(tf) or []
+                            agent_id = None
+                            client_id = None
+                            if ctx["final_intent_p"].exists():
+                                with ctx["final_intent_p"].open("r", encoding="utf-8") as inf:
+                                    roles = json.load(inf).get("speaker_roles", {})
+                                    agent_id = roles.get("agent", {}).get("speaker_id")
+                                    client_id = roles.get("client", {}).get("speaker_id")
+                            if segments:
+                                timeline_turns = []
+                                a_talk = 0.0
+                                c_talk = 0.0
+                                t_dur = 0.0
+                                for s in segments:
+                                    st = round(float(s.get("start", 0.0)), 2)
+                                    en = round(float(s.get("end", st)), 2)
+                                    dur = max(0.0, round(en - st, 2))
+                                    spk = str(s.get("speaker_id") or "UNKNOWN")
+                                    role = "agent" if (agent_id and spk == agent_id) else ("client" if (client_id and spk == client_id) else "other")
+                                    if role == "agent":
+                                        a_talk += dur
+                                    elif role == "client":
+                                        c_talk += dur
+                                    if en > t_dur:
+                                        t_dur = en
+                                    timeline_turns.append({"start": st, "end": en, "duration": dur, "speaker_id": spk, "role": role})
+                                total_sp = a_talk + c_talk
+                                eval_data["diarization_timeline"] = {
+                                    "total_duration_seconds": round(t_dur, 2),
+                                    "agent_speaker_id": agent_id,
+                                    "client_speaker_id": client_id,
+                                    "agent_talk_time_seconds": round(a_talk, 2),
+                                    "client_talk_time_seconds": round(c_talk, 2),
+                                    "agent_talk_ratio_pct": round(a_talk / total_sp * 100, 1) if total_sp > 0 else 55.0,
+                                    "client_talk_ratio_pct": round(c_talk / total_sp * 100, 1) if total_sp > 0 else 45.0,
+                                    "total_turns": len(timeline_turns),
+                                    "turns": timeline_turns,
+                                }
+                        except Exception as dt_err:
+                            logger.warning(f"Could not build diarization timeline in Stage 8: {dt_err}")
                     with ctx["final_eval_p"].open("w", encoding="utf-8") as f:
                         json.dump(eval_data, f, ensure_ascii=False, indent=2)
 
