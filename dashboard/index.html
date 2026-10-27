@@ -1009,9 +1009,14 @@
         <h1>Customer Support Call Scorecard Dashboard</h1>
         <p>Real-time speech quality evaluation, intent extraction, and automated scoring</p>
       </div>
-      <div class="server-status" id="serverStatusBadge">
-        <div class="status-dot" id="serverStatusDot"></div>
-        <span id="serverStatusText">Dashboard Ready</span>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <button class="btn btn-secondary" onclick="openSidebar(selectedCallIndex)" style="background: rgba(255, 255, 255, 0.15); color: white; border: 1px solid rgba(255, 255, 255, 0.25); font-size: 0.8rem; padding: 0.38rem 0.85rem; border-radius: 9999px;" title="Open detailed side dashboard drawer">
+          Side Dashboard &rarr;
+        </button>
+        <div class="server-status" id="serverStatusBadge">
+          <div class="status-dot" id="serverStatusDot"></div>
+          <span id="serverStatusText">Dashboard Ready</span>
+        </div>
       </div>
     </div>
   </header>
@@ -1214,6 +1219,9 @@
             <span id="heroResolutionBadge" class="badge badge-resolved">Resolved</span>
             <span id="heroIntentReviewBadge" class="badge" style="background: rgba(255,255,255,0.15); color: white;">Intent: Supported</span>
             <span id="heroEvidenceCount" class="badge" style="background: rgba(255,255,255,0.15); color: white;">6 Evidence Points</span>
+            <button class="btn btn-secondary" onclick="openSidebar(selectedCallIndex)" style="background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.25); font-size: 0.75rem; padding: 0.25rem 0.65rem; border-radius: 9999px;" title="Open detailed side dashboard drawer">
+              Inspect in Side Drawer &rarr;
+            </button>
           </div>
         </div>
       </div>
@@ -1968,30 +1976,35 @@
       if (!evaluations || evaluations.length === 0) {
         emptyState.style.display = 'block';
         resultsArea.style.display = 'none';
-        dropdownBanner.style.display = 'none';
-        summaryCard.style.display = 'none';
+        if (dropdownBanner) dropdownBanner.style.display = 'none';
+        if (summaryCard) summaryCard.style.display = 'none';
         return;
       }
 
       emptyState.style.display = 'none';
       resultsArea.style.display = 'block';
 
-      // "when files are > 2 then when clicked it shall open a dropdown to show the results"
-      if (evaluations.length > 2) {
-        dropdownBanner.style.display = 'flex';
+      // Always populate and show summary overview table when evaluations are present
+      if (summaryCard) {
         summaryCard.style.display = 'block';
-        populateDropdown();
         populateSummaryTable();
-      } else {
-        dropdownBanner.style.display = 'none';
-        summaryCard.style.display = 'none';
       }
 
-      // Render the currently selected call
+      // "when files are > 2 then when clicked it shall open a dropdown to show the results"
+      if (evaluations.length > 2) {
+        if (dropdownBanner) dropdownBanner.style.display = 'flex';
+        populateDropdown();
+      } else {
+        if (dropdownBanner) dropdownBanner.style.display = 'none';
+      }
+
+      // Render the currently selected call in BOTH main scorecard and side dashboard drawer
       if (selectedCallIndex >= evaluations.length) {
         selectedCallIndex = 0;
       }
       renderSingleScorecard(evaluations[selectedCallIndex]);
+      renderSidebarContent(evaluations[selectedCallIndex]);
+      updateSidebarNavButtons();
     }
 
     function populateDropdown() {
