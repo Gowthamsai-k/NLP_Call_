@@ -3065,8 +3065,7 @@
         }
 
         const eventFormatted = eventTag ? ` [Event: ${eventTag}]` : '';
-        const summaryLine = summaryText ? `\nSummary: "${summaryText}"` : '';
-        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${speakerName} (${dur.toFixed(1)}s)${eventFormatted}${overlapNotice}${summaryLine}`;
+        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${speakerName} (${dur.toFixed(1)}s)${eventFormatted}${overlapNotice}`;
 
         const hoverEvents = `onmouseenter="showTurnByIndex(event, ${idx})" onmousemove="moveTimelineTooltip(event)" onmouseleave="hideTimelineTooltip()"`;
 
@@ -3093,13 +3092,7 @@
         const dur = ov.dur;
         const leftPct = Math.max(0, Math.min(100, (st / totalDur) * 100));
         const widthPct = Math.max(0.8, Math.min(100 - leftPct, (dur / totalDur) * 100));
-        const overlappingTurns = turns.filter(t => Math.max(st, Number(t.start)||0) < Math.min(en, Number(t.end)||0));
-        ov.overlappingTurns = overlappingTurns;
-        let overlapDetails = '';
-        if (overlappingTurns.length > 0) {
-          overlapDetails = '\n' + overlappingTurns.map(ot => `* ${ot.role === 'agent' ? 'Agent' : 'Client'}: "${ot.summary || ot.text || 'Speaking'}"`).join('\n');
-        }
-        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] Cross-talk Overlap: ${dur.toFixed(1)}s (Simultaneous speech)${overlapDetails}`;
+        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] Cross-talk Overlap: ${dur.toFixed(1)}s (Simultaneous speech)`;
         const hoverEvents = `onmouseenter="showOverlapByIndex(event, ${ovIdx})" onmousemove="moveTimelineTooltip(event)" onmouseleave="hideTimelineTooltip()"`;
 
         hOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #fbbf24; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);" ${hoverEvents} title="${escapeHtml(tooltip)}"></div>`;
@@ -3162,57 +3155,15 @@
       const eventBadge = t.event_type ? `<span style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 4px; padding: 1px 6px; font-size: 0.68rem; font-weight: 600;">Event: ${escapeHtml(t.event_type)}</span>` : '';
       const overlapBadge = t.hasOverlap ? `<span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; border-radius: 4px; padding: 1px 6px; font-size: 0.68rem; font-weight: 600;">Simultaneous Speech</span>` : '';
 
-      // Prioritize original transcribed Devanagari / Indic script if present
-      const rawText = (t.raw_text || '').trim();
-      const txt = (t.text || '').trim();
-      const hasIndic = /[\u0900-\u0D7F]/.test(rawText) || /[\u0900-\u0D7F]/.test(txt);
-
-      let displayDialogue = txt;
-      if (/[\u0900-\u0D7F]/.test(rawText)) {
-        displayDialogue = rawText;
-      } else if (/[\u0900-\u0D7F]/.test(txt)) {
-        displayDialogue = txt;
-      } else if (rawText) {
-        displayDialogue = rawText;
-      }
-
-      let textHtml = '';
-      if (displayDialogue) {
-        const scriptBadge = hasIndic ? '<span style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; border-radius: 3px; padding: 1px 5px; font-size: 0.65rem; font-weight: 600;">Devanagari Script</span>' : '';
-        textHtml = `
-          <div style="margin-top: 6px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
-              <span style="font-size: 0.68rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px;">Spoken Dialogue</span>
-              ${scriptBadge}
-            </div>
-            <div style="font-style: normal; background: rgba(0, 0, 0, 0.35); border-left: 3px solid ${roleColor}; padding: 6px 10px; border-radius: 3px; color: #ffffff; font-size: 0.82rem; line-height: 1.5; font-family: 'Noto Sans Devanagari', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-height: 130px; overflow-y: auto;">
-              "${escapeHtml(displayDialogue)}"
-            </div>
-          </div>
-        `;
-      }
-
-      let summaryHtml = '';
-      if (t.summary && t.summary !== displayDialogue) {
-        summaryHtml = `
-          <div style="margin-top: 6px; padding-top: 5px; border-top: 1px dashed rgba(255, 255, 255, 0.12);">
-            <div style="font-size: 0.66rem; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 2px;">English Interpretation & Summary</div>
-            <div style="color: #cbd5e1; font-size: 0.74rem;">${escapeHtml(t.summary)}</div>
-          </div>
-        `;
-      }
-
       tip.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); padding-bottom: 5px; margin-bottom: 5px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <span style="font-weight: 700; color: ${roleColor}; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
             <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${roleColor};"></span>
             ${escapeHtml(roleTitle)}
           </span>
           <span style="font-family: monospace; color: #94a3b8; font-size: 0.72rem;">[${formatClock(st)} - ${formatClock(en)}] (${dur.toFixed(1)}s)</span>
         </div>
-        ${(eventBadge || overlapBadge) ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">${eventBadge}${overlapBadge}</div>` : ''}
-        ${textHtml}
-        ${summaryHtml}
+        ${(eventBadge || overlapBadge) ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">${eventBadge}${overlapBadge}</div>` : ''}
       `;
 
       tip.style.display = 'block';
@@ -3229,33 +3180,15 @@
       const st = ov.start;
       const en = ov.end;
       const dur = ov.dur;
-      const overlappingTurns = ov.overlappingTurns || [];
-
-      let concurrentHtml = '';
-      if (overlappingTurns.length > 0) {
-        concurrentHtml = `
-          <div style="margin-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.15); padding-top: 5px;">
-            <div style="font-size: 0.68rem; text-transform: uppercase; color: #fbbf24; font-weight: 700; margin-bottom: 3px;">Concurrent Dialogue:</div>
-            ${overlappingTurns.map(ot => {
-              const isAg = ot.role === 'agent';
-              const spkColor = isAg ? '#38bdf8' : '#93c5fd';
-              const spkName = isAg ? 'Agent' : 'Customer';
-              return `<div style="margin-bottom: 3px; font-size: 0.72rem;"><strong style="color: ${spkColor}">${spkName}:</strong> "${escapeHtml(ot.summary || ot.text || 'Speaking')}"</div>`;
-            }).join('')}
-          </div>
-        `;
-      }
 
       tip.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); padding-bottom: 5px; margin-bottom: 5px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <span style="font-weight: 700; color: #fbbf24; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
             <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24;"></span>
             Simultaneous Speech Overlap
           </span>
           <span style="font-family: monospace; color: #94a3b8; font-size: 0.72rem;">[${formatClock(st)} - ${formatClock(en)}] (${dur.toFixed(1)}s)</span>
         </div>
-        <div style="font-size: 0.74rem; color: #cbd5e1;">Cross-talk interval where both participants spoke simultaneously.</div>
-        ${concurrentHtml}
       `;
 
       tip.style.display = 'block';
