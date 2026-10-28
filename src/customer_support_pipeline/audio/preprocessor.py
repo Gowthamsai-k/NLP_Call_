@@ -66,12 +66,23 @@ def load_and_resample_audio(audio_path: str) -> Tuple[np.ndarray, int, float]:
 
     if original_sr != TARGET_SR:
         if librosa is not None:
-            data = librosa.resample(data, orig_sr=original_sr, target_sr=TARGET_SR)
-        else:
-            import math
-            from scipy.signal import resample_poly
-            gcd = math.gcd(int(original_sr), int(TARGET_SR))
-            data = resample_poly(data, TARGET_SR // gcd, original_sr // gcd).astype(np.float32)
+            try:
+                data = librosa.resample(data, orig_sr=original_sr, target_sr=TARGET_SR)
+            except Exception:
+                data = None
+        
+        if data is None or original_sr != TARGET_SR:
+            try:
+                import math
+                from scipy.signal import resample_poly
+                gcd = math.gcd(int(original_sr), int(TARGET_SR))
+                data = resample_poly(data, TARGET_SR // gcd, original_sr // gcd).astype(np.float32)
+            except Exception:
+                duration = len(data) / float(original_sr)
+                target_length = int(round(duration * TARGET_SR))
+                orig_indices = np.linspace(0.0, duration, len(data), endpoint=False)
+                target_indices = np.linspace(0.0, duration, target_length, endpoint=False)
+                data = np.interp(target_indices, orig_indices, data).astype(np.float32)
 
     audio_data = np.asarray(data, dtype=np.float32)
     duration = len(audio_data) / TARGET_SR
