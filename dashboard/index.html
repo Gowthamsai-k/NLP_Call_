@@ -623,9 +623,37 @@
       min-width: 3px;
     }
     .timeline-turn-block:hover {
-      filter: brightness(1.3) contrast(1.1);
-      z-index: 10;
-      box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+      filter: brightness(1.35) contrast(1.15);
+      z-index: 50;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+      transform: scaleY(1.15);
+    }
+
+    /* Floating Timeline Tooltip Popup */
+    .timeline-floating-tooltip {
+      position: fixed;
+      z-index: 999999;
+      pointer-events: none;
+      max-width: 380px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 8px;
+      padding: 10px 14px;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.8), 0 0 16px rgba(56, 189, 248, 0.25);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #f8fafc;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.1s ease, transform 0.1s ease;
+      display: none;
+    }
+    .timeline-floating-tooltip.visible {
+      opacity: 1;
+      transform: translateY(0);
+      display: block;
     }
 
     /* Sub-scores Grid */
@@ -2963,33 +2991,77 @@
       let sbAgentHtml = '';
       let sbClientHtml = '';
 
-      turns.forEach(t => {
+      // Cache current timeline structures in window scope for instant O(1) hover tooltip lookup
+      window._currentTimelineData = d;
+      window._currentTimelineTurns = turns;
+      window._currentTimelineOverlaps = overlaps;
+
+      turns.forEach((t, idx) => {
         const st = Number(t.start) || 0;
         const en = Number(t.end) || st;
         const dur = Math.max(0.1, en - st);
         const leftPct = Math.max(0, Math.min(100, (st / totalDur) * 100));
         const widthPct = Math.max(0.6, Math.min(100 - leftPct, (dur / totalDur) * 100));
         const role = t.role || (t.speaker_id === dt.agent_speaker_id ? 'agent' : 'client');
+        t.role = role;
         
         // Highlight turns with simultaneous speech
         const hasOverlap = overlaps.some(ov => Math.max(st, ov.start) < Math.min(en, ov.end));
+        t.hasOverlap = hasOverlap;
         const overlapNotice = hasOverlap ? ' [Overlapped with simultaneous speech]' : '';
         const speakerName = role === 'agent' ? 'Support Executive' : 'Customer';
-        const eventTag = t.event_type ? ` [Event: ${t.event_type}]` : '';
-        const summaryText = t.summary || t.text || '';
+
+        // Pre-enrich turn summary and event milestone if blank
+        let summaryText = t.summary || t.text || '';
+        let eventTag = t.event_type || '';
+        if (!summaryText) {
+          if (idx === 0 && role === 'agent') {
+            summaryText = 'Opening greeting and customer inquiry identification';
+            eventTag = eventTag || 'Greeting & Introduction';
+          } else if ((idx === 1 || idx === 0) && role === 'client') {
+            const needs = d.client_needs || [];
+            summaryText = needs.length > 0 ? `Caller query: ${needs[0]}` : 'Customer problem statement and request';
+            eventTag = eventTag || 'Issue Statement';
+          } else if (idx >= turns.length - 2) {
+            if (role === 'agent') {
+              const resExp = (d.resolution && d.resolution.explanation) ? d.resolution.explanation : 'Call resolution summary and concluding steps';
+              summaryText = resExp;
+              eventTag = eventTag || 'Closing & Resolution';
+            } else {
+              summaryText = 'Customer acknowledgement and sign-off';
+              eventTag = eventTag || 'Caller Sign-off';
+            }
+          } else {
+            if (role === 'agent') {
+              const actions = d.agent_actions || [];
+              const act = actions.length > 0 ? actions[(Math.floor(idx / 2) - 1) % actions.length] : 'Agent verification and inquiry assistance';
+              summaryText = `Agent: ${act}`;
+              eventTag = eventTag || 'Agent Action';
+            } else {
+              summaryText = 'Customer providing details and verification';
+              eventTag = eventTag || 'Discussion';
+            }
+          }
+          t.summary = summaryText;
+          t.event_type = eventTag;
+        }
+
+        const eventFormatted = eventTag ? ` [Event: ${eventTag}]` : '';
         const summaryLine = summaryText ? `\nSummary: "${summaryText}"` : '';
-        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${speakerName} (${dur.toFixed(1)}s)${eventTag}${overlapNotice}${summaryLine}`;
+        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${speakerName} (${dur.toFixed(1)}s)${eventFormatted}${overlapNotice}${summaryLine}`;
+
+        const hoverEvents = `onmouseenter="showTurnByIndex(event, ${idx})" onmousemove="moveTimelineTooltip(event)" onmouseleave="hideTimelineTooltip()"`;
 
         if (role === 'agent') {
           const overlapStyle = hasOverlap ? 'border-top: 2px solid #fbbf24; border-bottom: 2px solid #fbbf24;' : 'border: 1px solid rgba(255,255,255,0.25);';
           const sbOverlapStyle = hasOverlap ? 'border-top: 2px solid #f59e0b; border-bottom: 2px solid #f59e0b;' : '';
-          hAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #38bdf8; ${overlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
-          sbAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: var(--primary); ${sbOverlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
+          hAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #38bdf8; ${overlapStyle}" ${hoverEvents} title="${escapeHtml(tooltip)}"></div>`;
+          sbAgentHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: var(--primary); ${sbOverlapStyle}" ${hoverEvents} title="${escapeHtml(tooltip)}"></div>`;
         } else {
           const overlapStyle = hasOverlap ? 'border-top: 2px solid #fbbf24; border-bottom: 2px solid #fbbf24;' : 'border: 1px solid rgba(255,255,255,0.25);';
           const sbOverlapStyle = hasOverlap ? 'border-top: 2px solid #f59e0b; border-bottom: 2px solid #f59e0b;' : '';
-          hClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #93c5fd; ${overlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
-          sbClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #0284c7; ${sbOverlapStyle}" title="${escapeHtml(tooltip)}"></div>`;
+          hClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #93c5fd; ${overlapStyle}" ${hoverEvents} title="${escapeHtml(tooltip)}"></div>`;
+          sbClientHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #0284c7; ${sbOverlapStyle}" ${hoverEvents} title="${escapeHtml(tooltip)}"></div>`;
         }
       });
 
@@ -2997,21 +3069,23 @@
       let hOverlapHtml = '';
       let sbOverlapHtml = '';
 
-      overlaps.forEach(ov => {
+      overlaps.forEach((ov, ovIdx) => {
         const st = ov.start;
         const en = ov.end;
         const dur = ov.dur;
         const leftPct = Math.max(0, Math.min(100, (st / totalDur) * 100));
         const widthPct = Math.max(0.8, Math.min(100 - leftPct, (dur / totalDur) * 100));
         const overlappingTurns = turns.filter(t => Math.max(st, Number(t.start)||0) < Math.min(en, Number(t.end)||0));
+        ov.overlappingTurns = overlappingTurns;
         let overlapDetails = '';
         if (overlappingTurns.length > 0) {
           overlapDetails = '\n' + overlappingTurns.map(ot => `* ${ot.role === 'agent' ? 'Agent' : 'Client'}: "${ot.summary || ot.text || 'Speaking'}"`).join('\n');
         }
         const tooltip = `[${formatClock(st)} - ${formatClock(en)}] Cross-talk Overlap: ${dur.toFixed(1)}s (Simultaneous speech)${overlapDetails}`;
+        const hoverEvents = `onmouseenter="showOverlapByIndex(event, ${ovIdx})" onmousemove="moveTimelineTooltip(event)" onmouseleave="hideTimelineTooltip()"`;
 
-        hOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #fbbf24; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);" title="${escapeHtml(tooltip)}"></div>`;
-        sbOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #d97706;" title="${escapeHtml(tooltip)}"></div>`;
+        hOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #fbbf24; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);" ${hoverEvents} title="${escapeHtml(tooltip)}"></div>`;
+        sbOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #d97706;" ${hoverEvents} title="${escapeHtml(tooltip)}"></div>`;
       });
 
       const heroAgentTrack = document.getElementById('heroAgentTrack');
@@ -3054,6 +3128,142 @@
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
+
+    function showTurnByIndex(e, idx) {
+      if (!window._currentTimelineTurns || !window._currentTimelineTurns[idx]) return;
+      const t = window._currentTimelineTurns[idx];
+      const tip = document.getElementById('timelineFloatingTooltip');
+      if (!tip) return;
+
+      const st = Number(t.start) || 0;
+      const en = Number(t.end) || st;
+      const dur = Math.max(0.1, en - st);
+      const isAgent = t.role === 'agent';
+      const roleColor = isAgent ? '#38bdf8' : '#93c5fd';
+      const roleTitle = isAgent ? 'Support Executive' : 'Customer';
+      const eventBadge = t.event_type ? `<span style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 4px; padding: 1px 6px; font-size: 0.68rem; font-weight: 600;">Event: ${escapeHtml(t.event_type)}</span>` : '';
+      const overlapBadge = t.hasOverlap ? `<span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; border-radius: 4px; padding: 1px 6px; font-size: 0.68rem; font-weight: 600;">Simultaneous Speech</span>` : '';
+
+      let textHtml = '';
+      if (t.text) {
+        textHtml = `
+          <div style="margin-top: 6px;">
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 2px;">Spoken Dialogue</div>
+            <div style="font-style: italic; background: rgba(0, 0, 0, 0.28); border-left: 2px solid ${roleColor}; padding: 4px 8px; border-radius: 2px; color: #f1f5f9; font-size: 0.75rem; max-height: 120px; overflow-y: auto;">
+              "${escapeHtml(t.text)}"
+            </div>
+          </div>
+        `;
+      }
+
+      let summaryHtml = '';
+      if (t.summary && t.summary !== t.text) {
+        summaryHtml = `
+          <div style="margin-top: 5px;">
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 2px;">Turn Summary</div>
+            <div style="color: #cbd5e1; font-size: 0.74rem;">${escapeHtml(t.summary)}</div>
+          </div>
+        `;
+      }
+
+      tip.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); padding-bottom: 5px; margin-bottom: 5px;">
+          <span style="font-weight: 700; color: ${roleColor}; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${roleColor};"></span>
+            ${escapeHtml(roleTitle)}
+          </span>
+          <span style="font-family: monospace; color: #94a3b8; font-size: 0.72rem;">[${formatClock(st)} - ${formatClock(en)}] (${dur.toFixed(1)}s)</span>
+        </div>
+        ${(eventBadge || overlapBadge) ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">${eventBadge}${overlapBadge}</div>` : ''}
+        ${textHtml}
+        ${summaryHtml}
+      `;
+
+      tip.style.display = 'block';
+      requestAnimationFrame(() => tip.classList.add('visible'));
+      positionTimelineTooltip(e);
+    }
+
+    function showOverlapByIndex(e, ovIdx) {
+      if (!window._currentTimelineOverlaps || !window._currentTimelineOverlaps[ovIdx]) return;
+      const ov = window._currentTimelineOverlaps[ovIdx];
+      const tip = document.getElementById('timelineFloatingTooltip');
+      if (!tip) return;
+
+      const st = ov.start;
+      const en = ov.end;
+      const dur = ov.dur;
+      const overlappingTurns = ov.overlappingTurns || [];
+
+      let concurrentHtml = '';
+      if (overlappingTurns.length > 0) {
+        concurrentHtml = `
+          <div style="margin-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.15); padding-top: 5px;">
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: #fbbf24; font-weight: 700; margin-bottom: 3px;">Concurrent Dialogue:</div>
+            ${overlappingTurns.map(ot => {
+              const isAg = ot.role === 'agent';
+              const spkColor = isAg ? '#38bdf8' : '#93c5fd';
+              const spkName = isAg ? 'Agent' : 'Customer';
+              return `<div style="margin-bottom: 3px; font-size: 0.72rem;"><strong style="color: ${spkColor}">${spkName}:</strong> "${escapeHtml(ot.summary || ot.text || 'Speaking')}"</div>`;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      tip.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); padding-bottom: 5px; margin-bottom: 5px;">
+          <span style="font-weight: 700; color: #fbbf24; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24;"></span>
+            Simultaneous Speech Overlap
+          </span>
+          <span style="font-family: monospace; color: #94a3b8; font-size: 0.72rem;">[${formatClock(st)} - ${formatClock(en)}] (${dur.toFixed(1)}s)</span>
+        </div>
+        <div style="font-size: 0.74rem; color: #cbd5e1;">Cross-talk interval where both participants spoke simultaneously.</div>
+        ${concurrentHtml}
+      `;
+
+      tip.style.display = 'block';
+      requestAnimationFrame(() => tip.classList.add('visible'));
+      positionTimelineTooltip(e);
+    }
+
+    function positionTimelineTooltip(e) {
+      const tip = document.getElementById('timelineFloatingTooltip');
+      if (!tip || tip.style.display === 'none') return;
+
+      const tipWidth = tip.offsetWidth || 300;
+      const tipHeight = tip.offsetHeight || 130;
+      const padding = 12;
+
+      let x = e.clientX + 14;
+      let y = e.clientY + 14;
+
+      if (x + tipWidth > window.innerWidth - padding) {
+        x = e.clientX - tipWidth - 14;
+      }
+      if (y + tipHeight > window.innerHeight - padding) {
+        y = e.clientY - tipHeight - 14;
+      }
+      if (x < padding) x = padding;
+      if (y < padding) y = padding;
+
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+    }
+
+    function moveTimelineTooltip(e) {
+      positionTimelineTooltip(e);
+    }
+
+    function hideTimelineTooltip() {
+      const tip = document.getElementById('timelineFloatingTooltip');
+      if (!tip) return;
+      tip.classList.remove('visible');
+      tip.style.display = 'none';
+    }
   </script>
+
+  <!-- Interactive Floating Timeline Tooltip Popup Element -->
+  <div id="timelineFloatingTooltip" class="timeline-floating-tooltip"></div>
 </body>
 </html>

@@ -38,6 +38,8 @@ from src.customer_support_pipeline.storage.database import (
     query_evaluations_from_db,
     get_filter_options_from_db,
     sync_disk_evaluations_to_db,
+    save_evaluation_to_db,
+    enrich_timeline_turns_from_metadata,
     DEFAULT_DB_FILENAME,
 )
 
@@ -51,33 +53,11 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
     dt = data.get("diarization_timeline")
     trans_p = eval_dir / "call_transcript_with_speakers.json"
 
-    # If dt already exists and has text in its turns, it is fully enriched
+    # If dt already exists and has turns, enrich them with text, summaries, and event milestones
     if isinstance(dt, dict) and isinstance(dt.get("turns"), list) and len(dt["turns"]) > 0:
-        if dt["turns"][0].get("text"):
-            return dt
-        # Automatically backfill text and summary for previously evaluated records on the fly
-        if trans_p.exists():
-            try:
-                with trans_p.open("r", encoding="utf-8") as f:
-                    segments = json.load(f) or []
-                for t in dt["turns"]:
-                    t_st = float(t.get("start", 0.0))
-                    t_en = float(t.get("end", t_st))
-                    matched = [
-                        str(s.get("text", "")).strip()
-                        for s in segments
-                        if max(t_st, float(s.get("start", 0.0))) < min(t_en, float(s.get("end", 0.0))) + 0.1
-                    ]
-                    full_txt = " ".join([m for m in matched if m]).strip()
-                    t["text"] = full_txt
-                    t["summary"] = full_txt[:120] if full_txt else "Speech turn"
-                return dt
-            except Exception:
-                pass
-        return dt
+        return enrich_timeline_turns_from_metadata(dt, data, trans_p=trans_p)
 
     meta_p = eval_dir / "call_metadata.json"
-    trans_p = eval_dir / "call_transcript_with_speakers.json"
     segments = []
 
     if meta_p.exists():
@@ -142,7 +122,7 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
         agent_pct = round((agent_talk / total_speech * 100), 1) if total_speech > 0 else 55.0
         client_pct = round((client_talk / total_speech * 100), 1) if total_speech > 0 else 45.0
 
-        return {
+        res_dt = {
             "total_duration_seconds": round(total_dur, 2),
             "agent_speaker_id": agent_id,
             "client_speaker_id": client_id,
@@ -153,6 +133,7 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
             "total_turns": len(timeline_turns),
             "turns": timeline_turns,
         }
+        return enrich_timeline_turns_from_metadata(res_dt, data, trans_p=trans_p)
 
     fname = data.get("audio_file") or eval_dir.name
     seed = sum(ord(c) for c in fname)
@@ -190,7 +171,7 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
     agent_pct = round((agent_talk / total_speech * 100), 1) if total_speech > 0 else 56.0
     client_pct = round((client_talk / total_speech * 100), 1) if total_speech > 0 else 44.0
 
-    return {
+    res_dt = {
         "total_duration_seconds": round(call_len, 2),
         "agent_speaker_id": "SPEAKER_00",
         "client_speaker_id": "SPEAKER_01",
@@ -201,6 +182,7 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
         "total_turns": len(synth_turns),
         "turns": synth_turns,
     }
+    return enrich_timeline_turns_from_metadata(res_dt, data, trans_p=trans_p)
 
 
 def find_existing_evaluations(output_dir: Path):
@@ -483,6 +465,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if not db_path.exists():
                 sync_disk_evaluations_to_db(out_p, db_path)
 
+            def _ensure_enriched_turns(items):
+                for item in items:
+                    data = item.get("data")
+                    if isinstance(data, dict):
+                        dt = data.get("diarization_timeline")
+                        if not dt or not dt.get("turns") or (dt.get("turns") and not dt["turns"][0].get("text")):
+                            eval_id = item.get("id") or item.get("filename")
+                            eval_dir = out_p / str(eval_id)
+                            data["diarization_timeline"] = build_or_recover_diarization_timeline(eval_dir, data)
+                            item["data"] = data
+
             if all_flag:
                 evals, total_count = query_evaluations_from_db(
                     db_path,
@@ -495,6 +488,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 )
                 if not evals:
                     evals = find_existing_evaluations(out_p)
+                _ensure_enriched_turns(evals)
                 self.send_json_response(evals)
                 return
 
@@ -522,6 +516,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         dominant_language=lang_filter,
                         search=search_query,
                     )
+
+            _ensure_enriched_turns(evals)
 
             total_pages = max(1, (total_count + page_size_val - 1) // page_size_val) if total_count > 0 else 1
             self.send_json_response({

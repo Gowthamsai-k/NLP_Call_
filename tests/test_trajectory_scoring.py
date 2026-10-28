@@ -170,10 +170,53 @@ def test_schema_completeness():
     print("[Schema Test] All new parameters successfully verified in evaluation structure.")
 
 
+def test_database_enrichment_and_hover_metadata():
+    from src.customer_support_pipeline.storage.database import enrich_timeline_turns_from_metadata
+    
+    mock_data = {
+        "client_needs": ["Need help with student login"],
+        "agent_actions": ["Reset password and sent SMS"],
+        "resolution": {"status": "resolved", "explanation": "Password successfully reset and credentials verified"},
+        "scorecard": {
+            "evidence": [
+                {
+                    "timestamp": "10.0-15.0",
+                    "quote": "I have sent you the temporary password via SMS.",
+                    "category": "professionalism",
+                    "interpretation": "Agent provides direct resolution"
+                }
+            ]
+        }
+    }
+    raw_dt = {
+        "agent_speaker_id": "SPEAKER_00",
+        "client_speaker_id": "SPEAKER_01",
+        "turns": [
+            {"start": 0.0, "end": 4.0, "speaker_id": "SPEAKER_00", "role": "agent"},
+            {"start": 4.5, "end": 9.5, "speaker_id": "SPEAKER_01", "role": "client"},
+            {"start": 10.0, "end": 16.0, "speaker_id": "SPEAKER_00", "role": "agent"},
+            {"start": 16.5, "end": 20.0, "speaker_id": "SPEAKER_01", "role": "client"},
+        ]
+    }
+    enriched = enrich_timeline_turns_from_metadata(raw_dt, mock_data)
+    turns = enriched["turns"]
+    assert len(turns) == 4
+    for t in turns:
+        assert "text" in t and len(t["text"]) > 0, "Turn missing text"
+        assert "summary" in t and len(t["summary"]) > 0, "Turn missing summary"
+        assert "event_type" in t and len(t["event_type"]) > 0, "Turn missing event_type"
+    
+    # Verify matched quote on evidence turn
+    assert turns[2]["text"] == "I have sent you the temporary password via SMS."
+    assert turns[2]["event_type"] == "Professionalism"
+    print("[Database & Metadata Test] Timeline metadata enrichment verified.")
+
+
 if __name__ == "__main__":
     test_turn_compaction()
     test_20min_token_headroom()
     test_gated_deduction_math()
     test_schema_completeness()
     test_language_friction_and_timeline_metadata()
+    test_database_enrichment_and_hover_metadata()
     print("ALL TESTS PASSED SUCCESSFULLY!")
