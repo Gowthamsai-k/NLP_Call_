@@ -49,7 +49,31 @@ JOBS_LOCK = threading.Lock()
 # Discover and enrich existing evaluations with diarization timeline data
 def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
     dt = data.get("diarization_timeline")
+    trans_p = eval_dir / "call_transcript_with_speakers.json"
+
+    # If dt already exists and has text in its turns, it is fully enriched
     if isinstance(dt, dict) and isinstance(dt.get("turns"), list) and len(dt["turns"]) > 0:
+        if dt["turns"][0].get("text"):
+            return dt
+        # Automatically backfill text and summary for previously evaluated records on the fly
+        if trans_p.exists():
+            try:
+                with trans_p.open("r", encoding="utf-8") as f:
+                    segments = json.load(f) or []
+                for t in dt["turns"]:
+                    t_st = float(t.get("start", 0.0))
+                    t_en = float(t.get("end", t_st))
+                    matched = [
+                        str(s.get("text", "")).strip()
+                        for s in segments
+                        if max(t_st, float(s.get("start", 0.0))) < min(t_en, float(s.get("end", 0.0))) + 0.1
+                    ]
+                    full_txt = " ".join([m for m in matched if m]).strip()
+                    t["text"] = full_txt
+                    t["summary"] = full_txt[:120] if full_txt else "Speech turn"
+                return dt
+            except Exception:
+                pass
         return dt
 
     meta_p = eval_dir / "call_metadata.json"
@@ -193,9 +217,9 @@ def find_existing_evaluations(output_dir: Path):
                 data = json.load(f)
             call_name = data.get("audio_file") or eval_path.parent.name
 
-            # Ensure diarization_timeline is present
+            # Ensure diarization_timeline is present and enriched with hover text
             dt = data.get("diarization_timeline")
-            if not dt or not dt.get("turns"):
+            if not dt or not dt.get("turns") or (dt.get("turns") and not dt["turns"][0].get("text")):
                 data["diarization_timeline"] = build_or_recover_diarization_timeline(eval_path.parent, data)
                 try:
                     with eval_path.open("w", encoding="utf-8") as wf:
