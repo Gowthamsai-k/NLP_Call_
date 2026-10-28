@@ -11,7 +11,11 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import soundfile as sf
-import librosa
+
+try:
+    import librosa
+except (ImportError, ModuleNotFoundError):
+    librosa = None
 
 from ..core.config import (
     TARGET_SR,
@@ -61,7 +65,13 @@ def load_and_resample_audio(audio_path: str) -> Tuple[np.ndarray, int, float]:
         data = np.mean(data, axis=1)
 
     if original_sr != TARGET_SR:
-        data = librosa.resample(data, orig_sr=original_sr, target_sr=TARGET_SR)
+        if librosa is not None:
+            data = librosa.resample(data, orig_sr=original_sr, target_sr=TARGET_SR)
+        else:
+            import math
+            from scipy.signal import resample_poly
+            gcd = math.gcd(int(original_sr), int(TARGET_SR))
+            data = resample_poly(data, TARGET_SR // gcd, original_sr // gcd).astype(np.float32)
 
     audio_data = np.asarray(data, dtype=np.float32)
     duration = len(audio_data) / TARGET_SR
