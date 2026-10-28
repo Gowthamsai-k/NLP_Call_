@@ -1195,6 +1195,7 @@ RULES:
                     matched_summary = t_item.get("summary")
                     break
 
+            raw_s_text = str(seg.get("raw_text") or s_text).strip()
             timeline_turns.append({
                 "start": s_start,
                 "end": s_end,
@@ -1202,6 +1203,7 @@ RULES:
                 "speaker_id": s_spk,
                 "role": role,
                 "text": s_text,
+                "raw_text": raw_s_text,
                 "summary": matched_summary or (s_text[:120] if s_text else "Speech turn"),
                 "event_type": matched_event,
             })

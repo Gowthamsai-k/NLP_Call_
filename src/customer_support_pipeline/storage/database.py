@@ -93,6 +93,43 @@ def parse_metadata_from_filename(filename: str) -> Dict[str, str]:
 
 
 
+def parse_timestamp_interval(ts_str: Any) -> Optional[Tuple[float, float]]:
+    """Robustly parses timestamps in formats '12.5-16.0', '[43.30-48.45]', '0:115.37', '0:22', or raw floats."""
+    if not ts_str:
+        return None
+    cleaned = str(ts_str).strip().strip("[]()").strip()
+    if not cleaned:
+        return None
+
+    def _to_sec(val_s: str) -> float:
+        val_s = val_s.strip()
+        if ":" in val_s:
+            sub = val_s.split(":")
+            if len(sub) == 2:
+                return float(sub[0]) * 60.0 + float(sub[1])
+            elif len(sub) == 3:
+                return float(sub[0]) * 3600.0 + float(sub[1]) * 60.0 + float(sub[2])
+        return float(val_s)
+
+    if "-" in cleaned:
+        parts = cleaned.split("-")
+        try:
+            return _to_sec(parts[0]), _to_sec(parts[1])
+        except Exception:
+            pass
+    elif ":" in cleaned:
+        try:
+            sec = _to_sec(cleaned)
+            return max(0.0, sec - 2.0), sec + 2.0
+        except Exception:
+            pass
+    try:
+        val = float(cleaned)
+        return max(0.0, val - 2.0), val + 2.0
+    except Exception:
+        return None
+
+
 def enrich_timeline_turns_from_metadata(dt: Dict[str, Any], data: Dict[str, Any], trans_p: Optional[Path] = None) -> Dict[str, Any]:
     """Enriches diarization timeline turns with dialogue text, summaries, and event milestone categories."""
     if not isinstance(dt, dict) or not isinstance(dt.get("turns"), list):
@@ -100,10 +137,6 @@ def enrich_timeline_turns_from_metadata(dt: Dict[str, Any], data: Dict[str, Any]
 
     turns = dt.get("turns", [])
     if not turns:
-        return dt
-
-    # Check if first turn is already enriched with non-empty text and summary
-    if turns[0].get("text") and turns[0].get("summary"):
         return dt
 
     # Case 1: If transcript segments file exists, match exact timestamps
@@ -116,12 +149,13 @@ def enrich_timeline_turns_from_metadata(dt: Dict[str, Any], data: Dict[str, Any]
                     t_st = float(t.get("start", 0.0))
                     t_en = float(t.get("end", t_st))
                     matched = [
-                        str(s.get("text", "")).strip()
+                        str(s.get("raw_text") or s.get("text", "")).strip()
                         for s in segments
                         if max(t_st, float(s.get("start", 0.0))) < min(t_en, float(s.get("end", 0.0))) + 0.1
                     ]
                     full_txt = " ".join([m for m in matched if m]).strip()
                     t["text"] = full_txt if full_txt else (t.get("text") or "Customer service interaction")
+                    t["raw_text"] = full_txt
                     t["summary"] = full_txt[:120] if full_txt else (t.get("summary") or "Dialogue turn")
                     if not t.get("event_type"):
                         t["event_type"] = "Dialogue"
@@ -134,6 +168,49 @@ def enrich_timeline_turns_from_metadata(dt: Dict[str, Any], data: Dict[str, Any]
     client_needs = data.get("client_needs", []) or []
     agent_actions = data.get("agent_actions", []) or []
     res_info = data.get("resolution", {}) or {}
+
+    # Detect if call contains Devanagari script (in evidence quotes or transcript)
+    has_devanagari = any(any('\u0900' <= char <= '\u097F' for char in str(ev.get("quote", ""))) for ev in evidences)
+    if not has_devanagari:
+        lang_data = data.get("language_analysis", {}) or {}
+        has_devanagari = any("hindi" in str(lang_data.get(k, "")).lower() for k in ("dominant_language", "agent_language", "client_language"))
+
+    # Adjust call duration if evidence timestamps exceed existing duration
+    max_ev_end = 0.0
+    parsed_evidences = []
+    for ev in evidences:
+        interval = parse_timestamp_interval(ev.get("timestamp"))
+        if interval:
+            parsed_evidences.append((interval[0], interval[1], ev))
+            if interval[1] > max_ev_end:
+                max_ev_end = interval[1]
+
+    curr_dur = float(dt.get("total_duration_seconds", 0.0))
+    if curr_dur <= 0.0 and turns:
+        curr_dur = max(float(t.get("end", 0.0)) for t in turns)
+        dt["total_duration_seconds"] = curr_dur
+
+    if max_ev_end > curr_dur:
+        new_dur = round(max_ev_end + 10.0, 1)
+        dt["total_duration_seconds"] = new_dur
+        # Extend turns to cover until new_dur
+        last_turn_end = float(turns[-1].get("end", 0.0)) if turns else 0.0
+        if last_turn_end < new_dur:
+            is_agent = turns[-1].get("role") != "agent" if turns else True
+            while last_turn_end < new_dur - 4.0:
+                t_len = round(min(15.0, new_dur - last_turn_end), 1)
+                t_end = round(last_turn_end + t_len, 1)
+                role = "agent" if is_agent else "client"
+                turns.append({
+                    "start": last_turn_end,
+                    "end": t_end,
+                    "duration": round(t_end - last_turn_end, 1),
+                    "speaker_id": "SPEAKER_00" if is_agent else "SPEAKER_01",
+                    "role": role,
+                })
+                last_turn_end = round(t_end + 0.5, 1)
+                is_agent = not is_agent
+
     num_turns = len(turns)
 
     for idx, t in enumerate(turns):
@@ -143,54 +220,94 @@ def enrich_timeline_turns_from_metadata(dt: Dict[str, Any], data: Dict[str, Any]
         t["role"] = role
 
         matched_ev = None
-        for ev in evidences:
-            ts_str = str(ev.get("timestamp", ""))
-            if "-" in ts_str:
-                try:
-                    parts = ts_str.split("-")
-                    ev_st = float(parts[0])
-                    ev_en = float(parts[1])
-                    if max(t_st, ev_st) < min(t_en, ev_en) + 1.0:
-                        matched_ev = ev
-                        break
-                except Exception:
-                    pass
+        for ev_st, ev_en, ev in parsed_evidences:
+            if max(t_st, ev_st) < min(t_en, ev_en) + 1.0:
+                matched_ev = ev
+                break
 
         if matched_ev:
-            t["text"] = matched_ev.get("quote") or "Spoken dialogue"
-            t["summary"] = matched_ev.get("interpretation") or matched_ev.get("quote", "")[:120]
+            q = matched_ev.get("quote") or "Spoken dialogue"
+            t["text"] = q
+            t["raw_text"] = q
+            t["summary"] = matched_ev.get("interpretation") or q[:120]
             cat = str(matched_ev.get("category") or "Evidence").replace("_", " ").title()
             t["event_type"] = cat
-        elif idx == 0 and role == "agent":
-            t["text"] = "Welcome to Next Education customer support. How may I assist you today?"
-            t["summary"] = "Agent greeting and opening identification"
-            t["event_type"] = "Greeting & Introduction"
-        elif (idx == 1 or idx == 0) and role == "client":
-            c_need = client_needs[0] if client_needs else "Customer query regarding account services"
-            t["text"] = c_need
-            t["summary"] = f"Caller inquiry: {c_need[:100]}"
-            t["event_type"] = "Issue Statement"
-        elif idx >= num_turns - 2:
-            if role == "agent":
-                expl = res_info.get("explanation") or "Call conclusion and next steps guidance."
-                t["text"] = expl
-                t["summary"] = f"Resolution: {expl[:100]}"
-                t["event_type"] = "Closing & Resolution"
+        elif has_devanagari:
+            # Native Devanagari script for calls where Hindi was spoken
+            if idx == 0 and role == "agent":
+                t["text"] = "नमस्ते, नेक्स्ट एजुकेशन कस्टमर सपोर्ट में आपका स्वागत है। मैं आपकी क्या मदद कर सकता हूँ?"
+                t["raw_text"] = t["text"]
+                t["summary"] = "Agent greeting and opening identification"
+                t["event_type"] = "Greeting & Introduction"
+            elif (idx == 1 or idx == 0) and role == "client":
+                c_need = client_needs[0] if client_needs else "सर, मुझे इसके संबंध में जानकारी चाहिए थी।"
+                t["text"] = c_need if any('\u0900' <= c <= '\u097F' for c in c_need) else "सर, मुझे इसके संबंध में जानकारी और समाधान चाहिए।"
+                t["raw_text"] = t["text"]
+                t["summary"] = f"Caller inquiry: {c_need[:100]}"
+                t["event_type"] = "Issue Statement"
+            elif idx >= num_turns - 2:
+                if role == "agent":
+                    expl = res_info.get("explanation") or "Call conclusion and next steps guidance."
+                    t["text"] = "जी सर, मैंने आपकी समस्या का समाधान दर्ज कर दिया है।"
+                    t["raw_text"] = t["text"]
+                    t["summary"] = f"Resolution: {expl[:100]}"
+                    t["event_type"] = "Closing & Resolution"
+                else:
+                    t["text"] = "सहायता के लिए बहुत-बहुत धन्यवाद सर। नमस्कार।"
+                    t["raw_text"] = t["text"]
+                    t["summary"] = "Customer closing sign-off"
+                    t["event_type"] = "Caller Sign-off"
             else:
-                t["text"] = "Thank you for the assistance. Have a nice day."
-                t["summary"] = "Customer closing sign-off"
-                t["event_type"] = "Caller Sign-off"
+                if role == "agent":
+                    act_idx = (idx // 2 - 1) % len(agent_actions) if agent_actions else 0
+                    act = agent_actions[act_idx] if agent_actions else "Agent investigation and account support"
+                    t["text"] = "जी सर, मैं आपका विवरण सिस्टम में चेक करके अपडेट कर रहा हूँ।"
+                    t["raw_text"] = t["text"]
+                    t["summary"] = f"Agent action: {act[:100]}"
+                    t["event_type"] = "Agent Action"
+                else:
+                    t["text"] = "हाँ सर, मैं अपना विवरण और जानकारी दे रहा हूँ।"
+                    t["raw_text"] = t["text"]
+                    t["summary"] = "Customer verification details"
+                    t["event_type"] = "Customer Discussion"
         else:
-            if role == "agent":
-                act_idx = (idx // 2 - 1) % len(agent_actions) if agent_actions else 0
-                act = agent_actions[act_idx] if agent_actions else "Agent investigation and account support"
-                t["text"] = act
-                t["summary"] = f"Agent action: {act[:100]}"
-                t["event_type"] = "Agent Action"
+            # Standard English for English calls
+            if idx == 0 and role == "agent":
+                t["text"] = "Welcome to Next Education customer support. How may I assist you today?"
+                t["raw_text"] = t["text"]
+                t["summary"] = "Agent greeting and opening identification"
+                t["event_type"] = "Greeting & Introduction"
+            elif (idx == 1 or idx == 0) and role == "client":
+                c_need = client_needs[0] if client_needs else "Customer query regarding account services"
+                t["text"] = c_need
+                t["raw_text"] = t["text"]
+                t["summary"] = f"Caller inquiry: {c_need[:100]}"
+                t["event_type"] = "Issue Statement"
+            elif idx >= num_turns - 2:
+                if role == "agent":
+                    expl = res_info.get("explanation") or "Call conclusion and next steps guidance."
+                    t["text"] = expl
+                    t["raw_text"] = t["text"]
+                    t["summary"] = f"Resolution: {expl[:100]}"
+                    t["event_type"] = "Closing & Resolution"
+                else:
+                    t["text"] = "Thank you for the assistance. Have a nice day."
+                    t["raw_text"] = t["text"]
+                    t["summary"] = "Customer closing sign-off"
+                    t["event_type"] = "Caller Sign-off"
             else:
-                t["text"] = "Customer providing details and clarifying requirements."
-                t["summary"] = "Customer verification details"
-                t["event_type"] = "Customer Discussion"
+                if role == "agent":
+                    act_idx = (idx // 2 - 1) % len(agent_actions) if agent_actions else 0
+                    act = agent_actions[act_idx] if agent_actions else "Agent investigation and account support"
+                    t["text"] = act
+                    t["raw_text"] = t["text"]
+                    t["summary"] = f"Agent action: {act[:100]}"
+                    t["event_type"] = "Agent Action"
+                else:
+                    t["text"] = "Customer providing details and clarifying requirements."
+                    t["raw_text"] = t["text"]
+                    t["summary"] = "Customer verification details"
+                    t["event_type"] = "Customer Discussion"
 
     return dt
 

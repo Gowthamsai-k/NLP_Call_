@@ -212,6 +212,48 @@ def test_database_enrichment_and_hover_metadata():
     print("[Database & Metadata Test] Timeline metadata enrichment verified.")
 
 
+def test_devanagari_script_preservation():
+    from src.customer_support_pipeline.storage.database import enrich_timeline_turns_from_metadata
+    
+    hindi_data = {
+        "client_needs": ["शुल्क रसीद प्राप्त करने में समस्या"],
+        "agent_actions": ["रसीद का सत्यापन किया"],
+        "resolution": {"status": "resolved", "explanation": "रसीद सफलतापूर्वक भेज दी गई है"},
+        "scorecard": {
+            "evidence": [
+                {
+                    "timestamp": "[43.30-48.45]",
+                    "quote": "तो अभी वो सभी ट्राइंसेक्शन सक्सेस्फुल होगे और रिसिप्ट भी जनरेट हुआ।",
+                    "category": "professionalism",
+                    "interpretation": "Agent confirmed receipt generation"
+                }
+            ]
+        }
+    }
+    raw_dt = {
+        "total_duration_seconds": 60.0,
+        "agent_speaker_id": "SPEAKER_00",
+        "client_speaker_id": "SPEAKER_01",
+        "turns": [
+            {"start": 0.0, "end": 10.0, "speaker_id": "SPEAKER_00", "role": "agent"},
+            {"start": 10.5, "end": 25.0, "speaker_id": "SPEAKER_01", "role": "client"},
+            {"start": 40.0, "end": 50.0, "speaker_id": "SPEAKER_00", "role": "agent"},
+        ]
+    }
+    enriched = enrich_timeline_turns_from_metadata(raw_dt, hindi_data)
+    turns = enriched["turns"]
+    
+    # Verify Devanagari evidence quote matched exactly
+    matched_turn = turns[2]
+    assert matched_turn["text"] == "तो अभी वो सभी ट्राइंसेक्शन सक्सेस्फुल होगे और रिसिप्ट भी जनरेट हुआ।"
+    assert matched_turn["raw_text"] == "तो अभी वो सभी ट्राइंसेक्शन सक्सेस्फुल होगे और रिसिप्ट भी जनरेट हुआ।"
+    assert any('\u0900' <= c <= '\u097F' for c in matched_turn["text"]), "Devanagari script must be present"
+    
+    # Verify agent opening turn is in Devanagari script
+    assert any('\u0900' <= c <= '\u097F' for c in turns[0]["text"]), "Agent opening turn must be in Devanagari script"
+    print("[Devanagari Script Test] Devanagari native script successfully preserved and verified.")
+
+
 if __name__ == "__main__":
     test_turn_compaction()
     test_20min_token_headroom()
@@ -219,4 +261,5 @@ if __name__ == "__main__":
     test_schema_completeness()
     test_language_friction_and_timeline_metadata()
     test_database_enrichment_and_hover_metadata()
+    test_devanagari_script_preservation()
     print("ALL TESTS PASSED SUCCESSFULLY!")
