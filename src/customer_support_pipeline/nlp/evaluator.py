@@ -67,6 +67,9 @@ def empty_evaluation() -> Dict[str, Any]:
             "agent_language": "English",
             "client_language": "English",
             "dominant_language": "English",
+            "language_mismatch_detected": False,
+            "agent_language_adaptation": "matching_languages",
+            "language_friction_flag": False,
             "explanation": "Standard language exchange.",
         },
         "introduction_check": {
@@ -858,10 +861,34 @@ RULES:
         if lang_analysis.get("explanation"):
             explanation = f"{dynamic_lang['explanation']} - {lang_analysis['explanation'][:80]}"
 
+        # Check language mismatch and adaptation
+        agent_clean = agent_lang.lower()
+        client_clean = client_lang.lower()
+        mismatch_detected = bool(
+            agent_clean and client_clean and agent_clean != client_clean and "unknown" not in (agent_clean, client_clean)
+        )
+
+        llm_adapt = str(lang_analysis.get("agent_language_adaptation") or "").lower()
+        llm_friction = bool(lang_analysis.get("language_friction_flag"))
+
+        if mismatch_detected:
+            if not llm_adapt or llm_adapt not in ("adapted", "failed_to_adapt"):
+                final_adapt = "failed_to_adapt"
+                final_friction = True
+            else:
+                final_adapt = llm_adapt
+                final_friction = (final_adapt == "failed_to_adapt") or llm_friction
+        else:
+            final_adapt = "matching_languages"
+            final_friction = False
+
         evaluation_obj["language_analysis"] = {
             "dominant_language": dom_lang,
             "agent_language": agent_lang,
             "client_language": client_lang,
+            "language_mismatch_detected": mismatch_detected,
+            "agent_language_adaptation": final_adapt,
+            "language_friction_flag": final_friction,
             "explanation": str(explanation)[:250],
         }
 
@@ -1006,16 +1033,29 @@ RULES:
         if not isinstance(bonuses, list):
             bonuses = []
 
+        # Apply language friction deduction if detected
+        if evaluation_obj.get("language_analysis", {}).get("language_friction_flag"):
+            has_lang_ded = any("language" in str(d.get("reason", "")).lower() for d in deductions)
+            if not has_lang_ded:
+                c_lang = evaluation_obj["language_analysis"].get("client_language", "Indic language")
+                deductions.append({
+                    "category": "professionalism",
+                    "points": 14.0,
+                    "reason": f"Language friction: Caller spoke in {c_lang} but agent did not adapt or offer regional support.",
+                    "timestamp": "00:00",
+                    "quote": "",
+                })
+
         prof_ded = sum(float(d.get("points", 0.0)) for d in deductions if str(d.get("category", "")).lower() == "professionalism")
         resp_ded = sum(float(d.get("points", 0.0)) for d in deductions if str(d.get("category", "")).lower() == "respectfulness")
         pol_ded = sum(float(d.get("points", 0.0)) for d in deductions if str(d.get("category", "")).lower() == "politeness")
         emp_ded = sum(float(d.get("points", 0.0)) for d in deductions if str(d.get("category", "")).lower() == "empathy")
 
-        # Capped deductions so reasonable calls don't collapse below 50
-        prof_ded = min(prof_ded, 35.0)
-        resp_ded = min(resp_ded, 35.0)
-        pol_ded = min(pol_ded, 35.0)
-        emp_ded = min(emp_ded, 35.0)
+        # Stricter deduction cap (50.0) allows multiple lapses to drop scores into 50s-60s
+        prof_ded = min(prof_ded, 50.0)
+        resp_ded = min(resp_ded, 50.0)
+        pol_ded = min(pol_ded, 50.0)
+        emp_ded = min(emp_ded, 50.0)
 
         prof_bon = min(15.0, sum(float(b.get("points", 0.0)) for b in bonuses if str(b.get("category", "")).lower() == "professionalism"))
         resp_bon = min(15.0, sum(float(b.get("points", 0.0)) for b in bonuses if str(b.get("category", "")).lower() == "respectfulness"))
@@ -1118,12 +1158,14 @@ RULES:
         agent_talk_time = 0.0
         client_talk_time = 0.0
         total_duration = 0.0
+        trajectory = evaluation_obj.get("turn_trajectory") or []
 
         for seg in segments:
             s_start = round(float(seg.get("start", 0.0)), 2)
             s_end = round(float(seg.get("end", s_start)), 2)
             s_dur = max(0.0, round(s_end - s_start, 2))
             s_spk = str(seg.get("speaker_id") or "UNKNOWN")
+            s_text = str(seg.get("text", "")).strip()
 
             role = "agent" if (agent_id and s_spk == agent_id) else ("client" if (client_id and s_spk == client_id) else "other")
             if role == "agent":
@@ -1134,12 +1176,25 @@ RULES:
             if s_end > total_duration:
                 total_duration = s_end
 
+            # Find matching trajectory milestone if present
+            matched_event = None
+            matched_summary = None
+            for t_item in trajectory:
+                t_time = str(t_item.get("timestamp", ""))
+                if t_time and (f"{s_start:.1f}" in t_time or f"{s_end:.1f}" in t_time):
+                    matched_event = t_item.get("event_type")
+                    matched_summary = t_item.get("summary")
+                    break
+
             timeline_turns.append({
                 "start": s_start,
                 "end": s_end,
                 "duration": s_dur,
                 "speaker_id": s_spk,
                 "role": role,
+                "text": s_text,
+                "summary": matched_summary or (s_text[:120] if s_text else "Speech turn"),
+                "event_type": matched_event,
             })
 
         total_speech_time = agent_talk_time + client_talk_time

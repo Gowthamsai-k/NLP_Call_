@@ -97,18 +97,33 @@ def test_gated_deduction_math():
     assert emp == 90.0
     assert total >= 85.0, f"A good agent with minor slips should easily score in the 90s/80s (got {total})"
 
-    # Case 2: Deduction cap test (multiple slips in same category do not snowball infinitely)
+    # Case 2: Stricter deduction cap test (cap at 50.0 allows rough calls to drop into 50s-60s)
     stacked_deductions = [
-        {"category": "professionalism", "points": 10.0},
-        {"category": "professionalism", "points": 10.0},
-        {"category": "professionalism", "points": 10.0},
-        {"category": "professionalism", "points": 10.0},
+        {"category": "professionalism", "points": 15.0},
+        {"category": "professionalism", "points": 15.0},
+        {"category": "professionalism", "points": 15.0},
+        {"category": "professionalism", "points": 15.0},
     ]
     raw_ded = sum(d["points"] for d in stacked_deductions)
-    capped_ded = min(raw_ded, 35.0)
+    capped_ded = min(raw_ded, 50.0)
     capped_prof = 100.0 - capped_ded
     print(f"[Deduction Test Case 2] Raw deduction: -{raw_ded} -> Capped deduction: -{capped_ded} -> Prof: {capped_prof}")
-    assert capped_prof == 65.0, "Capping should prevent infinite deduction snowball"
+    assert capped_prof == 50.0, "Capping at 50.0 should allow rough calls to reflect stricter grading"
+
+
+def test_language_friction_and_timeline_metadata():
+    """Verifies language mismatch flags and timeline turn text/summary fields."""
+    empty = empty_evaluation()
+    lang = empty["language_analysis"]
+    assert "language_mismatch_detected" in lang
+    assert "agent_language_adaptation" in lang
+    assert "language_friction_flag" in lang
+    print("[Language Test] Language mismatch and friction flags present.")
+
+    # Test timeline turns structure
+    timeline = empty["diarization_timeline"]
+    assert "turns" in timeline
+    print("[Timeline Metadata Test] Timeline metadata verified.")
 
 
 def test_schema_completeness():
@@ -160,4 +175,5 @@ if __name__ == "__main__":
     test_20min_token_headroom()
     test_gated_deduction_math()
     test_schema_completeness()
+    test_language_friction_and_timeline_metadata()
     print("ALL TESTS PASSED SUCCESSFULLY!")

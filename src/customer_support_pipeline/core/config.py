@@ -107,7 +107,10 @@ Return one JSON object with exactly this structure:
     "agent_language": "string (e.g. English, Hindi, Hinglish, Tamil, Telugu)",
     "client_language": "string (e.g. English, Hindi, Hinglish, Tamil, Telugu)",
     "dominant_language": "string (e.g. English, Hindi, Tamil, Telugu)",
-    "explanation": "short string under 15 words"
+    "language_mismatch_detected": false,
+    "agent_language_adaptation": "matching_languages | adapted | failed_to_adapt",
+    "language_friction_flag": false,
+    "explanation": "short string under 25 words"
   },
   "introduction_check": {
     "status": "compliant | partially_compliant | non_compliant",
@@ -203,18 +206,25 @@ Return one JSON object with exactly this structure:
 }
 
 GUIDELINES:
-1. GATED DEDUCTION SCORING:
+1. GATED DEDUCTION SCORING (STRICTER CALIBRATION):
 - Each category starts at 100.0 (Professionalism: 100.0, Respectfulness: 100.0, Politeness: 100.0, Empathy: 100.0).
-- Penalties are capped per category so realistic slips do not collapse scores:
-  * Minor Protocol Slip (e.g. missing company name in greeting, rushed closing): deduct 3 to 5 points.
-  * Medium Lapse (e.g. slight interruption, delayed response, lack of active empathy): deduct 5 to 10 points. Maximum total deduction for medium lapses is 15 points per category.
-  * Serious Violation (e.g. arguing with customer, dismissive refusal): deduct 15 to 25 points.
+- Calibrated Stricter Penalties:
+  * Minor Protocol Slip (e.g. missing company name in greeting, rushed closing): deduct 6 to 8 points.
+  * Medium Lapse (e.g. slight interruption, delayed response, cold/indifferent tone, lack of active empathy): deduct 10 to 15 points.
+  * Language Mismatch Failure (Customer speaks in a different language and agent refuses or fails to adapt/switch): deduct 12 to 15 points in Professionalism and Empathy.
+  * Serious Violation (e.g. arguing with customer, dismissive refusal, false technical/policy advice): deduct 20 to 30 points.
   * Fatal Gate (e.g. abusive language, shouting, deliberate disconnect): Respectfulness is set to 0.0.
   * De-escalation Bonus: Calmly handling an angry caller awards +5 bonus points in Empathy or Respectfulness.
+- Category deduction cap is 50.0 points (allowing an agent with multiple lapses to drop into the 50s-60s range).
 - Each subscore is: 100.0 - (sum of deductions) + (sum of bonuses), clamped between 0.0 and 100.0.
 - Total score is the weighted average: (0.30 * Professionalism + 0.25 * Respectfulness + 0.25 * Politeness + 0.20 * Empathy) rounded to 1 decimal place.
 
-2. RESOLUTION LIFECYCLE & FIRST CONTACT RESOLUTION (FCR):
+2. LANGUAGE ANALYSIS & ADAPTATION CHECK:
+- If the customer speaks in an Indic language (e.g. Hindi, Tamil, Telugu) and the agent insists on speaking English without attempting to understand or switch, set language_mismatch_detected: true, agent_language_adaptation: 'failed_to_adapt', and language_friction_flag: true.
+- If the agent adapts by switching to the customer's language or arranging regional support, set agent_language_adaptation: 'adapted'.
+- If both speak the same language, set agent_language_adaptation: 'matching_languages'.
+
+3. RESOLUTION LIFECYCLE & FIRST CONTACT RESOLUTION (FCR):
 - Four phases:
   * Problem Definition: The exact core issue reported by the customer.
   * Diagnostic Action: Concrete steps taken by the agent to solve or troubleshoot the issue.
@@ -222,11 +232,11 @@ GUIDELINES:
   * Closure State: Final agreement reached on the call.
 - FCR Likelihood: 'high' only if fully resolved and verified on call; 'medium' if pending backend follow-up with clear ticket timeline; 'low' if unresolved or customer left dissatisfied.
 
-3. CLOSING PROTOCOL:
+4. CLOSING PROTOCOL:
 - Status is 'compliant' if the agent summarized actions, stated next steps or turnaround time, and asked 'Is there anything else I can help you with?'.
 - 'partially_compliant' if one or two were completed; 'non_compliant' if all were omitted.
 
-4. SENTIMENT TRAJECTORY & RISK SIGNALS:
+5. SENTIMENT TRAJECTORY & RISK SIGNALS:
 - Compare opening customer sentiment to closing customer sentiment ('improved', 'stable', 'worsened').
 - Set churn_risk: true if customer expressed desire to cancel or switch services.
 - Set escalation_requested: true if customer demanded to speak to a supervisor or manager.

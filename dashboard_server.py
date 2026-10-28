@@ -95,6 +95,7 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
             en = round(float(s.get("end", st)), 2)
             dur = max(0.0, round(en - st, 2))
             spk = str(s.get("speaker_id") or "UNKNOWN")
+            s_text = str(s.get("text", "")).strip()
             role = "agent" if (agent_id and spk == agent_id) else ("client" if (client_id and spk == client_id) else "other")
             if role == "agent":
                 agent_talk += dur
@@ -108,6 +109,9 @@ def build_or_recover_diarization_timeline(eval_dir: Path, data: dict) -> dict:
                 "duration": dur,
                 "speaker_id": spk,
                 "role": role,
+                "text": s_text,
+                "summary": s.get("summary") or (s_text[:120] if s_text else "Speech turn"),
+                "event_type": s.get("event_type"),
             })
 
         total_speech = agent_talk + client_talk

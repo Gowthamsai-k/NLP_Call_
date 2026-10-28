@@ -2974,7 +2974,11 @@
         // Highlight turns with simultaneous speech
         const hasOverlap = overlaps.some(ov => Math.max(st, ov.start) < Math.min(en, ov.end));
         const overlapNotice = hasOverlap ? ' [Overlapped with simultaneous speech]' : '';
-        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${role === 'agent' ? 'Support Executive' : 'Customer'}: ${dur.toFixed(1)}s turn${overlapNotice}`;
+        const speakerName = role === 'agent' ? 'Support Executive' : 'Customer';
+        const eventTag = t.event_type ? ` [Event: ${t.event_type}]` : '';
+        const summaryText = t.summary || t.text || '';
+        const summaryLine = summaryText ? `\nSummary: "${summaryText}"` : '';
+        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] ${speakerName} (${dur.toFixed(1)}s)${eventTag}${overlapNotice}${summaryLine}`;
 
         if (role === 'agent') {
           const overlapStyle = hasOverlap ? 'border-top: 2px solid #fbbf24; border-bottom: 2px solid #fbbf24;' : 'border: 1px solid rgba(255,255,255,0.25);';
@@ -2999,7 +3003,12 @@
         const dur = ov.dur;
         const leftPct = Math.max(0, Math.min(100, (st / totalDur) * 100));
         const widthPct = Math.max(0.8, Math.min(100 - leftPct, (dur / totalDur) * 100));
-        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] Cross-talk Overlap: ${dur.toFixed(1)}s (Simultaneous speech)`;
+        const overlappingTurns = turns.filter(t => Math.max(st, Number(t.start)||0) < Math.min(en, Number(t.end)||0));
+        let overlapDetails = '';
+        if (overlappingTurns.length > 0) {
+          overlapDetails = '\n' + overlappingTurns.map(ot => `* ${ot.role === 'agent' ? 'Agent' : 'Client'}: "${ot.summary || ot.text || 'Speaking'}"`).join('\n');
+        }
+        const tooltip = `[${formatClock(st)} - ${formatClock(en)}] Cross-talk Overlap: ${dur.toFixed(1)}s (Simultaneous speech)${overlapDetails}`;
 
         hOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #fbbf24; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);" title="${escapeHtml(tooltip)}"></div>`;
         sbOverlapHtml += `<div class="timeline-turn-block" style="left: ${leftPct}%; width: ${widthPct}%; background: #f59e0b; border: 1px solid #d97706;" title="${escapeHtml(tooltip)}"></div>`;
