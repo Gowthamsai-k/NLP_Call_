@@ -9,7 +9,7 @@ import re
 import math
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional, Union, Tuple
 
 import torch
 
@@ -160,15 +160,17 @@ def compact_intent(obj: Dict[str, Any]) -> str:
 
 def run_call_evaluation(
     transcript_or_path: Union[str, Path, List[Dict[str, Any]]],
-    intent_or_path: Union[str, Path, Dict[str, Any]],
-    output_path: str,
+    intent_or_path: Optional[Union[str, Path, Dict[str, Any]]] = None,
+    output_path: str = "call_evaluation.json",
+    intent_output_path: Optional[Union[str, Path]] = None,
     work_dir: Optional[str] = None,
     existing_llm: Optional[Any] = None,
     existing_tokenizer: Optional[Any] = None,
     release_llm_after: bool = True,
+    return_llm: bool = False,
     gpu_memory_utilization: float = EVAL_GPU_MEM,
-) -> Dict[str, Any]:
-    """Executes full customer support call evaluation."""
+) -> Union[Dict[str, Any], Tuple[Dict[str, Any], Any, Any]]:
+    """Executes unified single-pass customer support call evaluation and intent extraction."""
     os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
 
     if isinstance(transcript_or_path, (str, Path)):
@@ -177,16 +179,23 @@ def run_call_evaluation(
     else:
         segments = transcript_or_path
 
-    if isinstance(intent_or_path, (str, Path)):
-        with open(intent_or_path, "r", encoding="utf-8") as f:
-            extraction_obj = json.load(f)
-    else:
-        extraction_obj = intent_or_path
+    extraction_obj = {}
+    if intent_or_path is not None:
+        if isinstance(intent_or_path, (str, Path)):
+            p = Path(intent_or_path)
+            if p.exists() and p.stat().st_size > 0:
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        extraction_obj = json.load(f)
+                except Exception:
+                    extraction_obj = {}
+        elif isinstance(intent_or_path, dict):
+            extraction_obj = intent_or_path
 
     if not isinstance(segments, list) or not segments:
         raise ValueError("Transcript must be a non-empty list of segments.")
     if not isinstance(extraction_obj, dict):
-        raise ValueError("Intent extraction must be a JSON object.")
+        extraction_obj = {}
 
     output_p = Path(output_path).resolve()
     eval_work_dir = Path(work_dir) if work_dir else output_p.parent / "call_evaluation_batches"
@@ -279,7 +288,7 @@ def run_call_evaluation(
         speaker_roles["agent"]["speaker_id"] = agent_id
 
     agent_known = agent_id is not None
-    first_pass_extraction = compact_intent(extraction_obj)
+    first_pass_extraction = compact_intent(extraction_obj) if extraction_obj else "Extract customer primary intent, requests, and timeline directly from transcript."
     speaker_roles_json = json.dumps(speaker_roles, ensure_ascii=False)
 
     agent_rule = (
@@ -1217,7 +1226,35 @@ RULES:
         with output_p.open("w", encoding="utf-8") as f:
             json.dump(evaluation_obj, f, ensure_ascii=False, indent=2)
 
+        # Ensure intent_extraction.json is written for downstream compatibility
+        target_intent_p = Path(intent_output_path) if intent_output_path else output_p.parent / "intent_extraction.json"
+        if not target_intent_p.exists() or target_intent_p.stat().st_size == 0 or not extraction_obj:
+            extracted_needs = evaluation_obj.get("client_needs") or []
+            primary_intent = (
+                evaluation_obj.get("resolution_lifecycle", {}).get("problem_definition")
+                or (extracted_needs[0] if extracted_needs else "")
+                or evaluation_obj.get("intent_review")
+                or "Customer support inquiry"
+            )
+            intent_doc = {
+                "speaker_roles": speaker_roles,
+                "primary_client_intent": str(primary_intent),
+                "secondary_intents": extracted_needs[1:] if len(extracted_needs) > 1 else [],
+                "client_needs_and_requests": extracted_needs,
+                "key_events": [t.get("summary") for t in (evaluation_obj.get("turn_trajectory") or []) if t.get("summary")],
+                "uncertainties": evaluation_obj.get("uncertainties") or [],
+            }
+            try:
+                target_intent_p.parent.mkdir(parents=True, exist_ok=True)
+                with target_intent_p.open("w", encoding="utf-8") as inf:
+                    json.dump(intent_doc, inf, ensure_ascii=False, indent=2)
+                logger.info(f"Unified intent record saved -> {target_intent_p.name}")
+            except Exception as e:
+                logger.warning(f"Could not write intent record to {target_intent_p}: {e}")
+
         logger.info(f"Evaluation complete -> {output_p.name}")
+        if return_llm:
+            return evaluation_obj, evaluator_llm, tokenizer
         return evaluation_obj
 
     finally:

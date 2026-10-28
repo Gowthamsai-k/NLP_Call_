@@ -403,51 +403,48 @@ def _process_single_stage_batch(
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                 fname = ctx["input_p"].name
+                both_exist = (
+                    resume
+                    and ctx["final_intent_p"].exists()
+                    and ctx["final_intent_p"].stat().st_size > 0
+                    and ctx["final_eval_p"].exists()
+                    and ctx["final_eval_p"].stat().st_size > 0
+                )
+                if both_exist:
+                    logger.info(f"Stages 6 & 7 deliverables already exist for {fname}, resuming.")
+                    if stage_callback:
+                        stage_callback(fname, 6, "Qwen Intent Extraction & Client Needs (Resumed)")
+                        stage_callback(fname, 7, "Qwen Quality Scoring & Rubric Evaluation (Resumed)")
+                    continue
 
-                # Stage 6: Intent Extraction
-                if not (resume and ctx["final_intent_p"].exists() and ctx["final_intent_p"].stat().st_size > 0):
-                    try:
-                        if stage_callback:
-                            stage_callback(fname, 6, "Qwen Intent Extraction & Client Needs")
-                        intent_res, shared_llm, shared_tokenizer = run_intent_extraction(
-                            str(ctx["final_transcript_p"]),
-                            str(ctx["final_intent_p"]),
-                            work_dir=str(ctx["out_dir"] / "intent_batches"),
-                            existing_llm=shared_llm,
-                            existing_tokenizer=shared_tokenizer,
-                            release_llm_after=False,
-                            gpu_memory_utilization=intent_gpu_mem,
-                        )
-                        logger.info(f"Stage 6 complete -> {ctx['final_intent_p'].name} (saved immediately)")
-                    except Exception as exc:
-                        logger.error(f"Stage 6 failed for {fname}: {exc}", exc_info=True)
-                        ctx["failed"] = True
-                        ctx["error"] = f"Stage 6: {exc}"
-                        ctx["failed_stage"] = 6
-                        continue
+                # Unified Single-Pass Qwen Trajectory Evaluation & Intent Extraction
+                try:
+                    if stage_callback:
+                        stage_callback(fname, 6, "Qwen Unified Trajectory Evaluation (Single Pass)")
 
-                # Stage 7: Call Quality Evaluation
-                if not (resume and ctx["final_eval_p"].exists() and ctx["final_eval_p"].stat().st_size > 0):
-                    try:
-                        if stage_callback:
-                            stage_callback(fname, 7, "Qwen Quality Scoring & Rubric Evaluation")
-                        run_call_evaluation(
-                            str(ctx["final_transcript_p"]),
-                            str(ctx["final_intent_p"]),
-                            str(ctx["final_eval_p"]),
-                            work_dir=str(ctx["out_dir"] / "call_evaluation_batches"),
-                            existing_llm=shared_llm,
-                            existing_tokenizer=shared_tokenizer,
-                            release_llm_after=False,
-                            gpu_memory_utilization=eval_gpu_mem,
-                        )
-                        logger.info(f"Stage 7 complete -> {ctx['final_eval_p'].name} (saved immediately)")
-                    except Exception as exc:
-                        logger.error(f"Stage 7 failed for {fname}: {exc}", exc_info=True)
-                        ctx["failed"] = True
-                        ctx["error"] = f"Stage 7: {exc}"
-                        ctx["failed_stage"] = 7
-                        continue
+                    eval_res, shared_llm, shared_tokenizer = run_call_evaluation(
+                        str(ctx["final_transcript_p"]),
+                        intent_or_path=str(ctx["final_intent_p"]) if ctx["final_intent_p"].exists() else None,
+                        output_path=str(ctx["final_eval_p"]),
+                        intent_output_path=str(ctx["final_intent_p"]),
+                        work_dir=str(ctx["out_dir"] / "call_evaluation_batches"),
+                        existing_llm=shared_llm,
+                        existing_tokenizer=shared_tokenizer,
+                        release_llm_after=False,
+                        return_llm=True,
+                        gpu_memory_utilization=eval_gpu_mem,
+                    )
+                    logger.info(
+                        f"Stages 6 & 7 unified complete -> {ctx['final_eval_p'].name} and {ctx['final_intent_p'].name} (saved immediately)"
+                    )
+                    if stage_callback:
+                        stage_callback(fname, 7, "Qwen Quality Scoring & Rubric Evaluation (Completed)")
+                except Exception as exc:
+                    logger.error(f"Unified evaluation failed for {fname}: {exc}", exc_info=True)
+                    ctx["failed"] = True
+                    ctx["error"] = f"Stages 6 & 7: {exc}"
+                    ctx["failed_stage"] = 7
+                    continue
         finally:
             logger.info("--- [Stages 6 & 7] Unloading Qwen 2.5 3B LLM ONCE from GPU ---")
             release_memory(shared_llm, shared_tokenizer, delay=1.0)

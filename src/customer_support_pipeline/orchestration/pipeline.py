@@ -202,78 +202,51 @@ def process_single_call(
 
         release_memory()
 
-        # STAGE 6: Intent Extraction
-        if stage_callback:
-            stage_callback(6, "Qwen Intent Extraction & Client Needs")
-        if not (resume and final_intent_p.exists() and final_intent_p.stat().st_size > 0):
-            logger.info(">>> Stage 6: Intent Extraction...")
-            t0 = time.time()
-            intent_res, shared_llm, shared_tokenizer = retry_with_memory_cleanup(
-                run_intent_extraction,
-                str(final_transcript_p),
-                str(final_intent_p),
-                work_dir=str(out_dir / "intent_batches"),
-                existing_llm=None,
-                existing_tokenizer=None,
-                release_llm_after=not reuse_llm,
-                gpu_memory_utilization=intent_gpu_mem,
-                max_retries=max_retries,
-                backoff_factor=backoff_factor,
-                stage_name="Stage 6 (Intent Extraction)",
-            )
-            status_data["stages"]["intent_extraction"] = {"status": "success", "duration_s": round(time.time() - t0, 2)}
-        else:
-            logger.info(">>> Stage 6: Intent extraction already exists, resuming.")
+        # STAGES 6 & 7: Unified Single-Pass Qwen Trajectory Evaluation & Intent Extraction
+        both_exist = (
+            resume
+            and final_intent_p.exists()
+            and final_intent_p.stat().st_size > 0
+            and final_eval_p.exists()
+            and final_eval_p.stat().st_size > 0
+        )
+        if both_exist:
+            logger.info(">>> Stages 6 & 7: Unified intent and call evaluation already exist, resuming.")
             status_data["stages"]["intent_extraction"] = {"status": "resumed"}
-
-        # STAGE 7: Call Evaluation
-        if stage_callback:
-            stage_callback(7, "Qwen Quality Scoring & Rubric Evaluation")
-        if not (resume and final_eval_p.exists() and final_eval_p.stat().st_size > 0):
-            logger.info(">>> Stage 7: Call Evaluation...")
+            status_data["stages"]["evaluation"] = {"status": "resumed"}
+            if stage_callback:
+                stage_callback(6, "Qwen Intent Extraction & Client Needs (Resumed)")
+                stage_callback(7, "Qwen Quality Scoring & Rubric Evaluation (Resumed)")
+        else:
+            if stage_callback:
+                stage_callback(6, "Qwen Unified Trajectory Evaluation (Single Pass)")
+            logger.info(">>> Stages 6 & 7: Executing Unified Single-Pass Trajectory Evaluation...")
             t0 = time.time()
             try:
                 retry_with_memory_cleanup(
                     run_call_evaluation,
                     str(final_transcript_p),
-                    str(final_intent_p),
-                    str(final_eval_p),
+                    intent_or_path=str(final_intent_p) if final_intent_p.exists() else None,
+                    output_path=str(final_eval_p),
+                    intent_output_path=str(final_intent_p),
                     work_dir=str(out_dir / "call_evaluation_batches"),
-                    existing_llm=shared_llm,
-                    existing_tokenizer=shared_tokenizer,
+                    existing_llm=None,
+                    existing_tokenizer=None,
                     release_llm_after=True,
                     gpu_memory_utilization=eval_gpu_mem,
                     max_retries=max_retries,
                     backoff_factor=backoff_factor,
-                    stage_name="Stage 7 (Call Evaluation)",
+                    stage_name="Stages 6 & 7 (Unified Single-Pass Evaluation)",
                 )
             except Exception as eval_exc:
-                # If evaluating with shared_llm hit OOM, release completely and try fresh instance
-                if shared_llm is not None and "out of memory" in str(eval_exc).lower():
-                    logger.warning("Shared LLM failed with OOM during evaluation. Purging and re-trying fresh...")
-                    release_memory(shared_llm, shared_tokenizer, delay=1.0)
-                    shared_llm, shared_tokenizer = None, None
-                    retry_with_memory_cleanup(
-                        run_call_evaluation,
-                        str(final_transcript_p),
-                        str(final_intent_p),
-                        str(final_eval_p),
-                        work_dir=str(out_dir / "call_evaluation_batches"),
-                        existing_llm=None,
-                        existing_tokenizer=None,
-                        release_llm_after=True,
-                        gpu_memory_utilization=max(0.40, eval_gpu_mem - 0.15),
-                        max_retries=max_retries,
-                        backoff_factor=backoff_factor,
-                        stage_name="Stage 7 (Call Evaluation Retry)",
-                    )
-                else:
-                    raise eval_exc
+                logger.error(f"Unified evaluation failed: {eval_exc}", exc_info=True)
+                raise eval_exc
 
-            status_data["stages"]["evaluation"] = {"status": "success", "duration_s": round(time.time() - t0, 2)}
-        else:
-            logger.info(">>> Stage 7: Call evaluation already exists, resuming.")
-            status_data["stages"]["evaluation"] = {"status": "resumed"}
+            dur = round(time.time() - t0, 2)
+            status_data["stages"]["intent_extraction"] = {"status": "success", "duration_s": dur}
+            status_data["stages"]["evaluation"] = {"status": "success", "duration_s": dur}
+            if stage_callback:
+                stage_callback(7, "Qwen Quality Scoring & Rubric Evaluation (Completed)")
 
         # STAGE 8: Deliverable Cleanup (keep only final score evaluation)
         if stage_callback:
