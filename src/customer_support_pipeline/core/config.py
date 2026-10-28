@@ -82,9 +82,10 @@ Return JSON only.
 # CALL EVALUATION CONFIGURATION
 # ==============================================================================
 EVAL_MAX_MODEL_LEN = int(os.environ.get("EVAL_MAX_MODEL_LEN", "8192"))
-CHUNK_TEXT_TOKENS = int(os.environ.get("CHUNK_TEXT_TOKENS", "1200"))
-CHUNK_OUTPUT_TOKENS = int(os.environ.get("CHUNK_OUTPUT_TOKENS", "1400"))
-MERGE_OUTPUT_TOKENS = int(os.environ.get("MERGE_OUTPUT_TOKENS", "1600"))
+SINGLE_PASS_MAX_TOKENS = int(os.environ.get("SINGLE_PASS_MAX_TOKENS", "4500"))
+CHUNK_TEXT_TOKENS = int(os.environ.get("CHUNK_TEXT_TOKENS", "1800"))
+CHUNK_OUTPUT_TOKENS = int(os.environ.get("CHUNK_OUTPUT_TOKENS", "1600"))
+MERGE_OUTPUT_TOKENS = int(os.environ.get("MERGE_OUTPUT_TOKENS", "1800"))
 MERGE_GROUP_SIZE = 2
 EVAL_MAX_RETRIES = 2
 # Optimized default for 8GB VRAM (allows ~6GB Qwen 2.5 3B fp16 weights + KV cache)
@@ -92,10 +93,10 @@ EVAL_GPU_MEM = float(os.environ.get("EVAL_GPU_MEM", "0.85"))
 
 EVAL_SYSTEM_PROMPT = """
 You are an expert, independent customer-support quality evaluator.
-Evaluate only the supplied transcript and extracted findings.
+Evaluate only the supplied transcript and conversation context.
 Every call is unique. You must evaluate the agent critically based on the specific transcript and assign varied, dynamic scores that reflect real differences in agent performance. Do NOT output default static numbers like 85 or 90 for every call.
 The call may contain Indian English, Indic languages, and code-switching.
-Account for honorifics, tone, customer responsiveness, and issue resolution.
+Account for honorifics, tone, customer responsiveness, emotional trajectory, and issue resolution.
 Return exactly one valid JSON object without Markdown fences.
 """.strip()
 
@@ -116,73 +117,120 @@ Return one JSON object with exactly this structure:
     "greeting_quote": "short string under 20 words or null",
     "notes": "short string under 15 words"
   },
+  "closing_check": {
+    "status": "compliant | partially_compliant | non_compliant",
+    "summary_provided": true,
+    "next_steps_set": true,
+    "additional_help_offered": true,
+    "closing_quote": "short string under 25 words or null",
+    "notes": "short string under 20 words"
+  },
+  "sentiment_analysis": {
+    "starting_sentiment": "positive | neutral | frustrated | angry",
+    "ending_sentiment": "positive | neutral | frustrated | angry",
+    "sentiment_shift": "improved | stable | worsened",
+    "explanation": "short explanation under 25 words"
+  },
+  "risk_signals": {
+    "churn_risk": false,
+    "escalation_requested": false,
+    "threat_detected": false,
+    "notes": "string"
+  },
   "intent_review": "supported | partially_supported | unclear",
   "client_needs": ["string"],
   "agent_actions": ["string"],
   "resolution": {
     "status": "resolved | partially_resolved | unresolved | pending_follow_up | unclear",
-    "explanation": "string"
+    "fcr_likelihood": "high | medium | low",
+    "fcr_explanation": "string under 25 words",
+    "explanation": "detailed narrative covering problem, actions, verification, and closure"
+  },
+  "resolution_lifecycle": {
+    "problem_definition": "string",
+    "diagnostic_action": "string",
+    "verification_outcome": "string",
+    "closure_state": "string"
   },
   "scorecard": {
     "professionalism_score": 0.0,
     "respectfulness_score": 0.0,
     "politeness_score": 0.0,
+    "empathy_score": 0.0,
     "total_score": 0.0,
+    "deductions": [
+      {
+        "category": "professionalism | respectfulness | politeness | empathy",
+        "points": 5.0,
+        "reason": "string",
+        "timestamp": "string",
+        "quote": "string"
+      }
+    ],
+    "bonuses": [
+      {
+        "category": "professionalism | respectfulness | politeness | empathy",
+        "points": 5.0,
+        "reason": "string",
+        "timestamp": "string",
+        "quote": "string"
+      }
+    ],
     "professionalism_rationale": "string",
     "respectfulness_rationale": "string",
     "politeness_rationale": "string",
+    "empathy_rationale": "string",
     "evidence": [
       {
         "timestamp": "string",
         "speaker_id": "string",
         "quote": "string",
-        "category": "professionalism | respectfulness | politeness",
+        "category": "professionalism | respectfulness | politeness | empathy",
         "interpretation": "string"
       }
     ]
   },
+  "turn_trajectory": [
+    {
+      "turn": 1,
+      "timestamp": "string",
+      "speaker": "string",
+      "event_type": "greeting | problem_stated | action_taken | customer_verification | closing | escalation | filler",
+      "summary": "string under 15 words"
+    }
+  ],
   "uncertainties": ["string"]
 }
 
-LANGUAGE ANALYSIS GUIDELINES:
-- Identify the language or dialect used by the agent and client.
-- Identify the dominant language most used throughout the call.
-- Keep language explanation to under 15 words.
+GUIDELINES:
+1. GATED DEDUCTION SCORING:
+- Each category starts at 100.0 (Professionalism: 100.0, Respectfulness: 100.0, Politeness: 100.0, Empathy: 100.0).
+- Penalties are capped per category so realistic slips do not collapse scores:
+  * Minor Protocol Slip (e.g. missing company name in greeting, rushed closing): deduct 3 to 5 points.
+  * Medium Lapse (e.g. slight interruption, delayed response, lack of active empathy): deduct 5 to 10 points. Maximum total deduction for medium lapses is 15 points per category.
+  * Serious Violation (e.g. arguing with customer, dismissive refusal): deduct 15 to 25 points.
+  * Fatal Gate (e.g. abusive language, shouting, deliberate disconnect): Respectfulness is set to 0.0.
+  * De-escalation Bonus: Calmly handling an angry caller awards +5 bonus points in Empathy or Respectfulness.
+- Each subscore is: 100.0 - (sum of deductions) + (sum of bonuses), clamped between 0.0 and 100.0.
+- Total score is the weighted average: (0.30 * Professionalism + 0.25 * Respectfulness + 0.25 * Politeness + 0.20 * Empathy) rounded to 1 decimal place.
 
-INTRODUCTION & GREETING PROTOCOL GUIDELINES:
-- Check the initial turns of the conversation to see if the agent gave the standard company greeting.
-- Check if the agent stated their name ('agent_name_stated') and mentioned the company name ('company_named': true if Next Education or NextEdu was stated, else false).
-- Status is 'compliant' if both agent name and company were stated, 'partially_compliant' if one was stated, or 'non_compliant' if missing.
-- Set 'compliant' to true only if status is 'compliant'.
-- Quote the exact opening greeting in 'greeting_quote' (under 20 words) or null if absent.
+2. RESOLUTION LIFECYCLE & FIRST CONTACT RESOLUTION (FCR):
+- Four phases:
+  * Problem Definition: The exact core issue reported by the customer.
+  * Diagnostic Action: Concrete steps taken by the agent to solve or troubleshoot the issue.
+  * Verification Outcome: Whether the customer tested the solution during the call. If the customer ended politely (e.g. 'okay thanks bye') without testing the fix or without confirmation, status is 'unresolved' or 'pending_follow_up', NOT 'resolved'.
+  * Closure State: Final agreement reached on the call.
+- FCR Likelihood: 'high' only if fully resolved and verified on call; 'medium' if pending backend follow-up with clear ticket timeline; 'low' if unresolved or customer left dissatisfied.
 
-SCORING CRITERIA AND DYNAMIC SCORING RUBRIC (Each subscore must be an independent decimal float between 0.0 and 100.0 reflecting the specific recording):
-- Professionalism (0.0 to 100.0):
-  * 92.0 - 98.0: Exemplary problem understanding, structured guidance, proactive assistance, accurate information.
-  * 82.0 - 91.0: Good competence, answers customer questions correctly with minor hesitation or standard procedures.
-  * 70.0 - 81.0: Average support, took long to understand issue, repeated explanations needed, vague answers.
-  * 50.0 - 69.0: Poor competence, unable to address customer request, inaccurate info or unhelpful.
+3. CLOSING PROTOCOL:
+- Status is 'compliant' if the agent summarized actions, stated next steps or turnaround time, and asked 'Is there anything else I can help you with?'.
+- 'partially_compliant' if one or two were completed; 'non_compliant' if all were omitted.
 
-- Respectfulness (0.0 to 100.0):
-  * 93.0 - 99.0: Actively listened, zero interruptions, acknowledged customer feelings empathetically, appropriate cultural respect.
-  * 83.0 - 92.0: Attentive and polite throughout, standard respectful customer dialogue.
-  * 70.0 - 82.0: Talked over the customer or sounded impatient, abrupt transitions.
-  * 50.0 - 69.0: Dismissive, argumentative, or disrespectful.
-
-- Politeness (0.0 to 100.0):
-  * 92.0 - 98.0: Warm, personalized greeting, consistent pleasantries ("thank you", "please", "glad to assist"), warm sign-off.
-  * 82.0 - 91.0: Standard courteous greeting, polite tone throughout.
-  * 70.0 - 81.0: Rushed, transactional tone, skipped standard pleasantries.
-  * 50.0 - 69.0: Blunt, cold, or rude phrasing.
-
-RESOLUTION ALIGNMENT:
-- Fully resolved calls should generally receive overall scores in the 86.0 - 96.0 range.
-- Partially resolved or pending follow-up calls should generally receive overall scores in the 74.0 - 85.0 range.
-- Unresolved issues or calls with agent friction should receive overall scores in the 52.0 - 72.0 range.
-Calculate total_score as the arithmetic mean of the three scores rounded to 1 decimal place.
-Extract explicit agent actions and client needs from the conversation.
-Include at most 5 client needs, 6 agent actions, and 6 evidence items.
-Keep each rationale and explanation to 1-2 sentences.
+4. SENTIMENT TRAJECTORY & RISK SIGNALS:
+- Compare opening customer sentiment to closing customer sentiment ('improved', 'stable', 'worsened').
+- Set churn_risk: true if customer expressed desire to cancel or switch services.
+- Set escalation_requested: true if customer demanded to speak to a supervisor or manager.
+- Set threat_detected: true if customer mentioned legal action, consumer court, or social media complaints.
 """.strip()
 
 # ==============================================================================
