@@ -23,6 +23,8 @@ python3 -m nuitka \
   --include-package=scipy \
   --include-package=yaml \
   --include-package=psutil \
+  --no-deployment-flag=excluded-module-usage \
+  --no-deployment-flag=self-execution \
   --nofollow-import-to=IPython \
   --nofollow-import-to=jedi \
   --nofollow-import-to=traitlets \

@@ -26,6 +26,37 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Ensure host and virtual environment site-packages are reachable in standalone binary mode
+def _ensure_runtime_sys_path():
+    candidates = []
+    venv_dir = os.environ.get("VIRTUAL_ENV")
+    if venv_dir:
+        for sp in Path(venv_dir).glob("lib/python*/site-packages"):
+            candidates.append(str(sp))
+    try:
+        import site
+        u_site = site.getusersitepackages()
+        if u_site:
+            candidates.append(str(u_site))
+        s_dirs = site.getsitepackages()
+        if isinstance(s_dirs, list):
+            candidates.extend(s_dirs)
+    except Exception:
+        pass
+    candidates.extend([
+        "/usr/local/lib/python3.13",
+        "/usr/local/lib/python3.13/lib-dynload",
+        "/usr/local/lib/python3.13/site-packages",
+        "/home/next/Python-works/.venv/lib/python3.13/site-packages",
+        "/home/next/.local/lib/python3.13/site-packages",
+        "/usr/lib/python3/dist-packages",
+    ])
+    for c in candidates:
+        if os.path.isdir(c) and c not in sys.path:
+            sys.path.append(c)
+
+_ensure_runtime_sys_path()
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
