@@ -48,6 +48,8 @@ python3 -m nuitka \
   --nofollow-import-to=pygments \
   --nofollow-import-to=matplotlib \
   --nofollow-import-to=torch \
+  --nofollow-import-to=transformers \
+  --nofollow-import-to=pyannote \
   --include-package=src \
   --no-deployment-flag=excluded-module-usage \
   --no-deployment-flag=self-execution \
