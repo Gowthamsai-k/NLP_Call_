@@ -6,8 +6,7 @@ torch>=2.4.0
 torchaudio>=2.4.0
 torchcodec
 
-# Core ML & Inference Engines
-vllm[audio]>=0.6.0
+# Core ML & Inference Engines (Native Transformers & PyAnnote)
 pyannote.audio>=4.0.0
 transformers>=4.48.0
 accelerate>=0.34.0
