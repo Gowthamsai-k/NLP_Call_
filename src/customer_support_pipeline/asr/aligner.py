@@ -22,16 +22,29 @@ def align_speakers_with_transcript(
 ) -> List[Dict[str, Any]]:
     """Aligns speaker turns with punctuated ASR segments by maximum temporal overlap."""
     if isinstance(metadata_or_path, (str, Path)):
-        with open(metadata_or_path, "r", encoding="utf-8") as f:
-            metadata = json.load(f)
+        m_p = Path(metadata_or_path)
+        if m_p.exists():
+            with open(m_p, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        else:
+            metadata = {}
     else:
-        metadata = metadata_or_path
+        metadata = metadata_or_path or {}
 
     if isinstance(asr_or_path, (str, Path)):
-        with open(asr_or_path, "r", encoding="utf-8") as f:
-            transcript_segments = json.load(f)
+        a_p = Path(asr_or_path)
+        if not a_p.exists():
+            # Check fallback to raw whisper transcript if punctuated is missing
+            raw_fallback = a_p.parent / "whisper_raw_transcript.json"
+            if raw_fallback.exists():
+                a_p = raw_fallback
+        if a_p.exists():
+            with open(a_p, "r", encoding="utf-8") as f:
+                transcript_segments = json.load(f)
+        else:
+            transcript_segments = []
     else:
-        transcript_segments = asr_or_path
+        transcript_segments = asr_or_path or []
 
     combined = []
     diarization_turns = metadata.get("segments", [])

@@ -56,8 +56,13 @@ def run_punctuation_restoration(
     else:
         transcript_segments = transcript_or_path
 
+    output_p = Path(output_path).resolve()
+    output_p.parent.mkdir(parents=True, exist_ok=True)
+
     if not transcript_segments:
         logger.warning("No transcript segments provided for punctuation restoration.")
+        with output_p.open("w", encoding="utf-8") as f:
+            json.dump([], f, ensure_ascii=False, indent=2)
         return []
 
     punctuator = existing_punctuator

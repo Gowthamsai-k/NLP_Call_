@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 import torch
+import soundfile as sf
 
 from ..core.config import (
     ASR_MODEL_ID,

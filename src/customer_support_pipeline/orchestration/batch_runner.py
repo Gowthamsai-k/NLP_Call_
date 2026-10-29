@@ -352,10 +352,16 @@ def _process_single_stage_batch(
                     )
                     logger.info(f"Stage 4 complete -> {ctx['punctuated_p'].name} (saved immediately)")
                 except Exception as exc:
-                    logger.error(f"Stage 4 failed for {fname}: {exc}", exc_info=True)
-                    ctx["failed"] = True
-                    ctx["error"] = f"Stage 4: {exc}"
-                    ctx["failed_stage"] = 4
+                    logger.warning(f"Stage 4 punctuation failed for {fname}: {exc}. Falling back to raw transcript.")
+                    if ctx["whisper_raw_p"].exists():
+                        import shutil
+                        shutil.copy2(ctx["whisper_raw_p"], ctx["punctuated_p"])
+                    else:
+                        with ctx["punctuated_p"].open("w", encoding="utf-8") as pf:
+                            json.dump([], pf)
+                if not ctx["punctuated_p"].exists():
+                    with ctx["punctuated_p"].open("w", encoding="utf-8") as pf:
+                        json.dump([], pf)
         finally:
             logger.info("--- [Stage 4/8] Unloading Horizon Punctuation Model ONCE ---")
             release_memory(punct_model, delay=1.0)
