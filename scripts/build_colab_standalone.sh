@@ -47,6 +47,12 @@ python3 -m nuitka \
   --nofollow-import-to=traitlets \
   --nofollow-import-to=pygments \
   --nofollow-import-to=matplotlib \
+  --nofollow-import-to=jupyter_server \
+  --nofollow-import-to=jupyter_client \
+  --nofollow-import-to=jupyter_core \
+  --nofollow-import-to=notebook \
+  --nofollow-import-to=tornado \
+  --nofollow-import-to=google \
   --nofollow-import-to=torch \
   --nofollow-import-to=transformers \
   --nofollow-import-to=pyannote \
