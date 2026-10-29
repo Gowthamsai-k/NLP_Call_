@@ -38,7 +38,6 @@ echo "[5/6] Compiling dashboard_server with Nuitka standalone engine..."
 python3 -m nuitka \
   --standalone \
   --include-package=src \
-  --include-package=pysqlite3 \
   --include-package=soundfile \
   --include-package=numpy \
   --include-package=scipy \
