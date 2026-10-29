@@ -16,7 +16,7 @@ export PYTHONPATH=".:${PYTHONPATH:-}"
 echo ""
 echo "[1/6] Installing OS audio and build libraries (ffmpeg, patchelf)..."
 sudo apt-get update -qq
-sudo apt-get install -y -qq ffmpeg patchelf libsndfile1
+sudo apt-get install -y -qq ffmpeg patchelf libsndfile1 libsecret-1-0 gir1.2-secret-1 || true
 
 echo ""
 echo "[2/6] Upgrading pip and installing Nuitka compiler..."
@@ -37,6 +37,9 @@ echo ""
 echo "[5/6] Compiling dashboard_server with Nuitka standalone engine..."
 python3 -m nuitka \
   --standalone \
+  --disable-plugin=gi \
+  --nofollow-import-to=gi \
+  --nofollow-import-to=keyring \
   --include-package=src \
   --include-package=soundfile \
   --include-package=numpy \
