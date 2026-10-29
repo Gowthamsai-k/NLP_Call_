@@ -42,6 +42,7 @@ python3 -m nuitka \
   --nofollow-import-to=keyring \
   --nofollow-import-to=numpy \
   --nofollow-import-to=scipy \
+  --nofollow-import-to=numba \
   --nofollow-import-to=IPython \
   --nofollow-import-to=jedi \
   --nofollow-import-to=traitlets \
