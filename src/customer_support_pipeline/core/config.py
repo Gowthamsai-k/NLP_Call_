@@ -244,6 +244,28 @@ GUIDELINES:
 """.strip()
 
 # ==============================================================================
+# AGENT PERFORMANCE METRICS (deterministic, no LLM)
+# Thresholds are heuristics; calibrate against labelled calls before use in reviews.
+# ==============================================================================
+AGENT_METRICS_VERSION = 1
+AM_INTERRUPT_MIN_OVERLAP_S = 0.3
+AM_INTERRUPT_MIN_TURN_S = 0.8
+AM_RESPONSE_MAX_GAP_S = 30.0
+AM_DEAD_AIR_MIN_S = 3.0
+AM_HOLD_MIN_S = 20.0
+AM_MIN_RATE_TURN_S = 1.0
+AM_RUSHED_RATE_RATIO = 1.5
+AM_RUSHED_MIN_TURN_S = 2.0
+AM_MIN_ACOUSTIC_TURN_S = 1.0
+AM_MONOTONE_PITCH_STD_ST = 2.0
+AM_ESCALATION_DB_PER_MIN = 1.0
+AM_FATIGUE_PITCH_DROP_ST = 1.0
+AM_FATIGUE_ENERGY_DROP_DB = 2.0
+AM_FATIGUE_RATE_DROP_PCT = 15.0
+AM_PITCH_MIN_HZ = 60.0
+AM_PITCH_MAX_HZ = 400.0
+
+# ==============================================================================
 # PIPELINE & RETRY CONFIGURATION
 # ==============================================================================
 DEFAULT_STAGE_RETRIES = 3

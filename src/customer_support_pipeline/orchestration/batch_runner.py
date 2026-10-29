@@ -40,6 +40,7 @@ from ..asr.punctuator import load_punctuation_model, run_punctuation_restoration
 from ..asr.aligner import align_speakers_with_transcript
 from ..nlp.intent_extractor import run_intent_extraction
 from ..nlp.evaluator import run_call_evaluation
+from ..nlp.agent_metrics import attach_agent_performance
 from ..storage.database import save_evaluation_to_db, DEFAULT_DB_FILENAME
 
 logger = logging.getLogger(__name__)
@@ -542,6 +543,10 @@ def _process_single_stage_batch(
                                 }
                         except Exception as dt_err:
                             logger.warning(f"Could not build diarization timeline in Stage 8: {dt_err}")
+                    attach_agent_performance(
+                        eval_data,
+                        str(ctx["clean_wav_p"]) if ctx["clean_wav_p"].exists() else None,
+                    )
                     with ctx["final_eval_p"].open("w", encoding="utf-8") as f:
                         json.dump(eval_data, f, ensure_ascii=False, indent=2)
 
