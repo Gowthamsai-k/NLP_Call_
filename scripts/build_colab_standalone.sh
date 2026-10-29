@@ -25,13 +25,13 @@ python3 -m pip install nuitka patchelf
 
 echo ""
 echo "[3/6] Installing full ML pipeline dependencies in environment..."
-python3 -m pip install -r requirements.txt sentencepiece
+python3 -m pip install -r requirements.txt sentencepiece soundfile pyyaml psutil
 
 echo ""
 echo "[4/6] Vendoring all runtime packages into offline bundle..."
 rm -rf colab_dist
 mkdir -p colab_dist/vendor_packages
-python3 -m pip install -r requirements.txt sentencepiece --target colab_dist/vendor_packages --no-compile
+python3 -m pip install -r requirements.txt sentencepiece soundfile pyyaml psutil --target colab_dist/vendor_packages --no-compile
 
 echo ""
 echo "[5/6] Compiling dashboard_server with Nuitka standalone engine..."
@@ -40,20 +40,17 @@ python3 -m nuitka \
   --disable-plugin=gi \
   --nofollow-import-to=gi \
   --nofollow-import-to=keyring \
-  --include-package=src \
-  --include-package=soundfile \
-  --include-package=numpy \
-  --include-package=scipy \
-  --include-package=yaml \
-  --include-package=psutil \
-  --no-deployment-flag=excluded-module-usage \
-  --no-deployment-flag=self-execution \
+  --nofollow-import-to=numpy \
+  --nofollow-import-to=scipy \
   --nofollow-import-to=IPython \
   --nofollow-import-to=jedi \
   --nofollow-import-to=traitlets \
   --nofollow-import-to=pygments \
   --nofollow-import-to=matplotlib \
   --nofollow-import-to=torch \
+  --include-package=src \
+  --no-deployment-flag=excluded-module-usage \
+  --no-deployment-flag=self-execution \
   --include-data-dir=dashboard=dashboard \
   --output-dir=colab_dist \
   --jobs=4 \
