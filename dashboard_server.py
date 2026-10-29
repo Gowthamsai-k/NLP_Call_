@@ -28,7 +28,15 @@ if str(PROJECT_ROOT) not in sys.path:
 
 # Ensure host and virtual environment site-packages are reachable in standalone binary mode
 def _ensure_runtime_sys_path():
-    candidates = []
+    dist_dir = Path(__file__).resolve().parent
+    local_vendor = dist_dir / "vendor_packages"
+    if local_vendor.is_dir() and str(local_vendor) not in sys.path:
+        sys.path.insert(0, str(local_vendor))
+
+    candidates = [
+        str(PROJECT_ROOT / "vendor_packages"),
+        str(dist_dir / "site-packages"),
+    ]
     venv_dir = os.environ.get("VIRTUAL_ENV")
     if venv_dir:
         for sp in Path(venv_dir).glob("lib/python*/site-packages"):

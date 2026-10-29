@@ -3,7 +3,7 @@
 venv/
 ENV/
 env/
-
+_.txt
 # Python caches and build artifacts
 __pycache__/
 *.py[cod]

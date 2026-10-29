@@ -235,6 +235,14 @@ def _process_single_stage_batch(
         diarization_pipeline = None
         try:
             diarization_pipeline = load_diarization_pipeline(hf_token=hf_token)
+        except Exception as load_exc:
+            logger.warning(
+                f"PyAnnote pipeline load unavailable ({type(load_exc).__name__}: {load_exc}). "
+                "Proceeding with zero-dependency fallback turn detection."
+            )
+            diarization_pipeline = None
+
+        try:
             for idx, ctx in enumerate(files_to_diarize):
                 if idx > 0 and idx % 20 == 0:
                     import gc
@@ -245,10 +253,11 @@ def _process_single_stage_batch(
                 fname = ctx["input_p"].name
                 try:
                     if stage_callback:
-                        stage_callback(fname, 2, "Speaker Diarization (PyAnnote)")
+                        stage_callback(fname, 2, "Speaker Diarization")
                     run_diarization(
                         str(ctx["clean_wav_p"]),
                         str(ctx["metadata_p"]),
+                        hf_token=hf_token,
                         existing_pipeline=diarization_pipeline,
                         release_after=False,
                     )
@@ -260,7 +269,8 @@ def _process_single_stage_batch(
                     ctx["failed_stage"] = 2
         finally:
             logger.info("--- [Stage 2/8] Unloading PyAnnote Diarization Model ONCE from GPU ---")
-            release_memory(diarization_pipeline, delay=1.0)
+            if diarization_pipeline is not None:
+                release_memory(diarization_pipeline, delay=1.0)
             log_vram("Post-Diarization Batch Cleanup")
     else:
         logger.info("\n--- [Stage 2/8] All files already have metadata. Skipping model load. ---")
