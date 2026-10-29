@@ -1970,7 +1970,7 @@
 
       const formData = new FormData();
       formData.append('mode', currentMode);
-      formData.append('asr_lang', 'en');
+      formData.append('asr_lang', 'auto');
       selectedFiles.forEach(file => {
         formData.append('files', file, file.webkitRelativePath || file.name);
       });

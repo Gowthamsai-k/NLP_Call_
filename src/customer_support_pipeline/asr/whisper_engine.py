@@ -36,7 +36,7 @@ def load_asr_model(
     decoder: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Loads and returns the ASR model bundle (Indic-Conformer or fallback Whisper) onto GPU once."""
-    lang_code = language or ASR_LANG or "en"
+    lang_code = language or ASR_LANG or "auto"
     decoder_type = decoder or ASR_DECODER or "ctc"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -185,7 +185,7 @@ def run_transcription(
         f"Audio loaded for ASR: {duration:.2f}s at {samplerate} Hz across {len(segments)} turns"
     )
 
-    lang_code = language or ASR_LANG or "en"
+    lang_code = language or ASR_LANG or "auto"
     decoder_type = decoder or ASR_DECODER or "ctc"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

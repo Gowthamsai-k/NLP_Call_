@@ -625,7 +625,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             parts = body.split(boundary_bytes)
             uploaded_files = []
             mode = "folder"
-            asr_lang = os.environ.get("ASR_LANG", "en")
+            asr_lang = os.environ.get("ASR_LANG", "auto")
             asr_decoder = os.environ.get("ASR_DECODER", "ctc")
 
             job_id = f"job_{int(time.time())}_{uuid.uuid4().hex[:6]}"
@@ -649,7 +649,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if 'name="mode"' in headers_raw:
                     mode = file_data.decode("utf-8", errors="ignore").strip()
                 elif 'name="asr_lang"' in headers_raw:
-                    asr_lang = file_data.decode("utf-8", errors="ignore").strip() or "en"
+                    asr_lang = file_data.decode("utf-8", errors="ignore").strip() or "auto"
                 elif 'name="asr_decoder"' in headers_raw:
                     asr_decoder = file_data.decode("utf-8", errors="ignore").strip() or "ctc"
                 elif 'name="files"' in headers_raw or 'filename="' in headers_raw:
