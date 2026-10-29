@@ -9,7 +9,7 @@ from pathlib import Path
 # MODEL IDENTIFIERS
 # ==============================================================================
 DIARIZATION_MODEL_ID = "pyannote/speaker-diarization-community-1"
-ASR_MODEL_ID = os.environ.get("ASR_MODEL_ID", "ai4bharat/indic-conformer-600m-multilingual")
+ASR_MODEL_ID = os.environ.get("ASR_MODEL_ID", "bodhan-ai/indic-transcribe-core")
 WHISPER_MODEL_ID = ASR_MODEL_ID  # Backward-compatible alias
 PUNCTUATION_MODEL_ID = "Horizon-Labs/punctuation-restoration-small"
 LLM_MODEL_ID = os.environ.get("LLM_MODEL_ID", "Qwen/Qwen2.5-3B-Instruct")

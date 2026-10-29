@@ -39,6 +39,7 @@ def load_asr_model(
     decoder_type = decoder or ASR_DECODER or "ctc"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    bodhan_model = None
     indic_model = None
     whisper_pipe = None
     vllm_llm = None
@@ -46,9 +47,36 @@ def load_asr_model(
 
     _orig_stdout = sys.stdout
     try:
-        # 1. Attempt to initialize AI4Bharat Indic-Conformer 600M Multilingual
+        # 1. Attempt to initialize Bodhan IndicTranscribe if configured
+        is_bodhan = "indic-transcribe" in ASR_MODEL_ID.lower() or "bodhan" in ASR_MODEL_ID.lower()
+        if is_bodhan:
+            try:
+                log_vram("Before Bodhan IndicTranscribe ASR Load")
+                logger.info(f"Loading Bodhan IndicTranscribe ASR model ({ASR_MODEL_ID}) on {device}...")
+                token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+                from huggingface_hub import snapshot_download
+                model_dir = snapshot_download(repo_id=ASR_MODEL_ID, token=token)
+                if str(model_dir) not in sys.path:
+                    sys.path.insert(0, str(model_dir))
+                from indic_transcribe import IndicTranscribe
+                bodhan_model = IndicTranscribe.from_pretrained(model_dir)
+                if hasattr(bodhan_model, "to"):
+                    try:
+                        bodhan_model = bodhan_model.to(device)
+                    except Exception:
+                        pass
+                logger.info("Bodhan IndicTranscribe ASR loaded successfully.")
+            except Exception as bodhan_err:
+                logger.warning(
+                    f"Bodhan ASR load failed ({type(bodhan_err).__name__}: {bodhan_err}). "
+                    "Falling back to Indic-Conformer or Whisper..."
+                )
+                bodhan_model = None
+                release_memory()
+
+        # 2. Attempt to initialize AI4Bharat Indic-Conformer 600M Multilingual
         is_indic_conformer = "indic-conformer" in ASR_MODEL_ID.lower()
-        if is_indic_conformer:
+        if is_indic_conformer and bodhan_model is None:
             try:
                 log_vram("Before Indic-Conformer ASR Load")
                 logger.info(
@@ -69,8 +97,8 @@ def load_asr_model(
                 indic_model = None
                 release_memory()
 
-        # 2. Fallback to Whisper if not Indic-Conformer or if Indic-Conformer failed
-        if indic_model is None:
+        # 3. Fallback to Whisper if not Bodhan/Indic-Conformer or if they failed
+        if bodhan_model is None and indic_model is None:
             try:
                 from vllm import LLM, SamplingParams
                 log_vram("Before Whisper vLLM Load")
@@ -113,6 +141,7 @@ def load_asr_model(
         sys.stdout = _orig_stdout
 
     return {
+        "bodhan_model": bodhan_model,
         "indic_model": indic_model,
         "whisper_pipe": whisper_pipe,
         "vllm_llm": vllm_llm,
@@ -160,6 +189,7 @@ def run_transcription(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if existing_model is not None:
+        bodhan_model = existing_model.get("bodhan_model")
         indic_model = existing_model.get("indic_model")
         whisper_pipe = existing_model.get("whisper_pipe")
         vllm_llm = existing_model.get("vllm_llm")
@@ -170,6 +200,7 @@ def run_transcription(
             language=lang_code,
             decoder=decoder_type,
         )
+        bodhan_model = model_bundle.get("bodhan_model")
         indic_model = model_bundle.get("indic_model")
         whisper_pipe = model_bundle.get("whisper_pipe")
         vllm_llm = model_bundle.get("vllm_llm")
@@ -197,7 +228,43 @@ def run_transcription(
 
             text = ""
             try:
-                if indic_model is not None:
+                if bodhan_model is not None:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+                        temp_wav_path = tf.name
+                    try:
+                        sf.write(temp_wav_path, turn_audio, samplerate)
+                        target_lang = active_lang if active_lang not in ("auto", "multilingual", None) else None
+                        lang_map = {
+                            "hindi": "hi", "hin": "hi",
+                            "telugu": "te", "tel": "te",
+                            "tamil": "ta", "tam": "ta",
+                            "english": "en", "eng": "en",
+                            "kannada": "kn", "kan": "kn",
+                            "malayalam": "ml", "mal": "ml",
+                            "marathi": "mr", "mar": "mr",
+                            "gujarati": "gu", "guj": "gu",
+                            "bengali": "bn", "ben": "bn",
+                            "punjabi": "pa", "pan": "pa",
+                            "odia": "or", "ori": "or",
+                        }
+                        if target_lang:
+                            target_lang = lang_map.get(target_lang.lower(), target_lang.lower())
+                        pred = bodhan_model(temp_wav_path, lang=target_lang) if target_lang else bodhan_model(temp_wav_path)
+                        if isinstance(pred, dict):
+                            text = pred.get("text") or pred.get("transcription") or str(pred)
+                        elif isinstance(pred, (list, tuple)):
+                            text = pred[0].strip() if pred else ""
+                        else:
+                            text = str(pred or "").strip()
+                    finally:
+                        if os.path.exists(temp_wav_path):
+                            try:
+                                os.remove(temp_wav_path)
+                            except Exception:
+                                pass
+
+                elif indic_model is not None:
                     # Convert float32 numpy array to torch tensor (1, samples)
                     wav_tensor = torch.from_numpy(turn_audio).unsqueeze(0).to(device)
                     with torch.no_grad():
@@ -266,5 +333,5 @@ def run_transcription(
         sys.stdout = _orig_stdout
         torch.backends.cudnn.enabled = original_cudnn_state
         if release_after:
-            release_memory(indic_model, vllm_llm, sampling_params, whisper_pipe)
+            release_memory(bodhan_model, indic_model, vllm_llm, sampling_params, whisper_pipe)
             log_vram("After ASR Cleanup")

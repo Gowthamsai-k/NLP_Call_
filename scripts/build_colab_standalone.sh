@@ -25,13 +25,13 @@ python3 -m pip install nuitka patchelf
 
 echo ""
 echo "[3/6] Installing full ML pipeline dependencies in environment..."
-python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt sentencepiece
 
 echo ""
 echo "[4/6] Vendoring all runtime packages into offline bundle..."
 rm -rf colab_dist
 mkdir -p colab_dist/vendor_packages
-python3 -m pip install -r requirements.txt --target colab_dist/vendor_packages --no-compile
+python3 -m pip install -r requirements.txt sentencepiece --target colab_dist/vendor_packages --no-compile
 
 echo ""
 echo "[5/6] Compiling dashboard_server with Nuitka standalone engine..."
@@ -76,8 +76,8 @@ hf_token = os.environ.get('HF_TOKEN')
 models_dir = 'colab_dist/hf_models'
 
 models = [
+    'bodhan-ai/indic-transcribe-core',
     'pyannote/speaker-diarization-community-1',
-    'ai4bharat/indic-conformer-600m-multilingual',
     'Horizon-Labs/punctuation-restoration-small',
     'Qwen/Qwen2.5-3B-Instruct',
 ]
