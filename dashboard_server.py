@@ -65,6 +65,21 @@ def _ensure_runtime_sys_path():
 
 _ensure_runtime_sys_path()
 
+# Ensure bundled Hugging Face models are loaded offline if present
+def _ensure_runtime_models_path():
+    dist_dir = Path(__file__).resolve().parent
+    local_models = dist_dir / "hf_models"
+    if not local_models.is_dir():
+        local_models = PROJECT_ROOT / "hf_models"
+    if local_models.is_dir():
+        os.environ["HF_HOME"] = str(local_models)
+        os.environ["HUGGINGFACE_HUB_CACHE"] = str(local_models / "hub")
+        os.environ["TRANSFORMERS_CACHE"] = str(local_models / "hub")
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+_ensure_runtime_models_path()
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,

@@ -62,6 +62,37 @@ echo "Integrating vendor_packages into dashboard_server.dist..."
 mv colab_dist/vendor_packages colab_dist/dashboard_server.dist/
 cp HOW_TO_USE.txt colab_dist/dashboard_server.dist/ 2>/dev/null || true
 
+if [ "${BUNDLE_MODELS:-0}" = "1" ] || [ "${1}" = "--with-models" ]; then
+  echo ""
+  echo "[Extra] Downloading all Hugging Face AI models into offline bundle..."
+  mkdir -p colab_dist/hf_models
+  python3 -c "
+import os
+from huggingface_hub import snapshot_download
+
+hf_token = os.environ.get('HF_TOKEN')
+models_dir = 'colab_dist/hf_models'
+
+models = [
+    'pyannote/speaker-diarization-community-1',
+    'ai4bharat/indic-conformer-600m-multilingual',
+    'Horizon-Labs/punctuation-restoration-small',
+    'Qwen/Qwen2.5-3B-Instruct',
+]
+for model_id in models:
+    print(f'Downloading {model_id}...')
+    try:
+        snapshot_download(
+            repo_id=model_id,
+            local_dir=os.path.join(models_dir, 'hub', 'models--' + model_id.replace('/', '--')),
+            token=hf_token,
+        )
+    except Exception as exc:
+        print(f'Warning: Could not download {model_id}: {exc}')
+"
+  mv colab_dist/hf_models colab_dist/dashboard_server.dist/
+fi
+
 echo ""
 echo "[6/6] Packaging complete self-contained production archive..."
 tar -czf customer_support_pipeline_production_full.tar.gz -C colab_dist dashboard_server.dist
