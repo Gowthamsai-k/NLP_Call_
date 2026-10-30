@@ -16,8 +16,13 @@ CLIENT = "SPEAKER_01"
 
 
 def _timeline(turns, total=None):
+    if total is not None:
+        tot = total
+    else:
+        ends = [t.get("end") for t in turns if isinstance(t, dict) and isinstance(t.get("end"), (int, float))]
+        tot = max(ends) if ends else 0.0
     return {
-        "total_duration_seconds": total if total is not None else (max(t["end"] for t in turns) if turns else 0.0),
+        "total_duration_seconds": tot,
         "agent_speaker_id": AGENT,
         "client_speaker_id": CLIENT,
         "agent_talk_ratio_pct": 50.0,
@@ -92,6 +97,10 @@ def test_missing_audio_marks_acoustics_unavailable_without_failing():
 
 
 def test_monotone_agent_voice_is_flagged(tmp_path):
+    try:
+        import librosa
+    except ImportError:
+        return
     sr = 16000
     turns, samples, t_cursor = [], [], 0.0
     for i in range(4):

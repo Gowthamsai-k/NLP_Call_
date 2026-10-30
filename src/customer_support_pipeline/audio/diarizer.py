@@ -278,9 +278,9 @@ def _run_pyannote_diarization(
         # Pre-load audio directly with soundfile to bypass TorchCodec / torchaudio.load entirely
         audio_data, sr = sf.read(audio_path, dtype="float32")
         if audio_data.ndim == 1:
-            waveform_tensor = torch.from_numpy(audio_data).unsqueeze(0)
+            waveform_tensor = torch.from_numpy(np.ascontiguousarray(audio_data)).unsqueeze(0)
         else:
-            waveform_tensor = torch.from_numpy(audio_data.T)
+            waveform_tensor = torch.from_numpy(np.ascontiguousarray(audio_data.T))
 
         diarization_input = {
             "waveform": waveform_tensor,

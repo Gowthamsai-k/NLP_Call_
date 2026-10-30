@@ -26,6 +26,17 @@ python3 -m nuitka \
   --nofollow-import-to=numpy \
   --nofollow-import-to=scipy \
   --nofollow-import-to=torch \
+  --nofollow-import-to=torchvision \
+  --nofollow-import-to=torchaudio \
+  --nofollow-import-to=torch_audiomentations \
+  --nofollow-import-to=torchcodec \
+  --nofollow-import-to=torchmetrics \
+  --nofollow-import-to=lightning \
+  --nofollow-import-to=pytorch_lightning \
+  --nofollow-import-to=librosa \
+  --nofollow-import-to=soundfile \
+  --nofollow-import-to=soxr \
+  --nofollow-import-to=sentencepiece \
   --nofollow-import-to=transformers \
   --nofollow-import-to=pyannote \
   --nofollow-import-to=IPython \
@@ -38,8 +49,17 @@ python3 -m nuitka \
   --no-deployment-flag=self-execution \
   --include-data-dir=dashboard=dashboard \
   --output-dir=build_dist \
-  --jobs=4 \
+  --lto=no \
+  --jobs=2 \
   dashboard_server.py
+
+# Purge any stray duplicate C10/PyTorch libraries from root dist
+rm -f build_dist/dashboard_server.dist/libc10*.so
+rm -f build_dist/dashboard_server.dist/libtorch*.so
+rm -f build_dist/dashboard_server.dist/libshm*.so
+rm -rf build_dist/dashboard_server.dist/torch*
+rm -rf build_dist/dashboard_server.dist/soxr
+rm -rf build_dist/dashboard_server.dist/librosa
 
 # Move vendor_packages into dashboard_server.dist
 if [ -d "build_dist/vendor_packages" ]; then

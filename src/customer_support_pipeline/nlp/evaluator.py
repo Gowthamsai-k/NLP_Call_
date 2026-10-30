@@ -313,32 +313,37 @@ def run_call_evaluation(
         else:
             hf_llm = evaluator_llm
     else:
-        try:
-            from vllm import LLM, SamplingParams
-            log_vram("Before Qwen Evaluator LLM Load")
-            _orig_stdout, _orig_stderr = sys.stdout, sys.stderr
+        use_vllm = os.environ.get("USE_VLLM", "0").lower() in ("1", "true", "yes")
+        if use_vllm:
             try:
-                sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
-                vllm_llm = LLM(
-                    model=LLM_MODEL_ID,
-                    dtype="half",
-                    trust_remote_code=True,
-                    max_model_len=EVAL_MAX_MODEL_LEN,
-                    max_num_seqs=1,
-                    gpu_memory_utilization=gpu_memory_utilization,
-                    disable_log_stats=True,
-                    enforce_eager=True,
+                from vllm import LLM, SamplingParams
+                log_vram("Before Qwen Evaluator LLM Load")
+                _orig_stdout, _orig_stderr = sys.stdout, sys.stderr
+                try:
+                    sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+                    vllm_llm = LLM(
+                        model=LLM_MODEL_ID,
+                        dtype="half",
+                        trust_remote_code=True,
+                        max_model_len=EVAL_MAX_MODEL_LEN,
+                        max_num_seqs=1,
+                        gpu_memory_utilization=gpu_memory_utilization,
+                        disable_log_stats=True,
+                        enforce_eager=True,
+                    )
+                finally:
+                    sys.stdout, sys.stderr = _orig_stdout, _orig_stderr
+                evaluator_llm = vllm_llm
+                logger.info("vLLM Evaluator LLM loaded successfully.")
+            except Exception as vllm_err:
+                logger.warning(
+                    f"vLLM engine unavailable ({type(vllm_err).__name__}: {vllm_err}). "
+                    "Switching seamlessly to native Hugging Face Transformers Qwen LLM..."
                 )
-            finally:
-                sys.stdout, sys.stderr = _orig_stdout, _orig_stderr
-            evaluator_llm = vllm_llm
-            logger.info("vLLM Evaluator LLM loaded successfully.")
-        except Exception as vllm_err:
-            logger.warning(
-                f"vLLM engine unavailable ({type(vllm_err).__name__}: {vllm_err}). "
-                "Switching seamlessly to native Hugging Face Transformers Qwen LLM..."
-            )
-            release_memory()
+                release_memory()
+                vllm_llm = None
+
+        if evaluator_llm is None:
             from transformers import AutoModelForCausalLM
             hf_llm = AutoModelForCausalLM.from_pretrained(
                 LLM_MODEL_ID,

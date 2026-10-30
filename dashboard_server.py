@@ -7,6 +7,20 @@ Serves the static dashboard and handles audio/folder/zip uploads with asynchrono
 
 import os
 import sys
+import multiprocessing
+
+# Enforce spawn start method to prevent CUDA re-initialization crashes in forked subprocesses
+try:
+    multiprocessing.set_start_method("spawn", force=True)
+except (RuntimeError, ValueError):
+    pass
+
+# Configure PyTorch memory allocator and tokenizers parallelism before torch/cuda initialization
+if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+if "TOKENIZERS_PARALLELISM" not in os.environ:
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import json
 import time
 import shutil
@@ -30,40 +44,49 @@ if str(PROJECT_ROOT) not in sys.path:
 def _ensure_runtime_sys_path():
     dist_dir = Path(__file__).resolve().parent
     local_vendor = dist_dir / "vendor_packages"
-    if local_vendor.is_dir() and str(local_vendor) not in sys.path:
-        sys.path.insert(0, str(local_vendor))
+    if not local_vendor.is_dir():
+        local_vendor = PROJECT_ROOT / "vendor_packages"
 
-    candidates = [
-        str(PROJECT_ROOT / "vendor_packages"),
-        str(dist_dir / "site-packages"),
-    ]
-    venv_dir = os.environ.get("VIRTUAL_ENV")
-    if venv_dir:
-        for sp in Path(venv_dir).glob("lib/python*/site-packages"):
-            candidates.append(str(sp))
-    try:
-        import site
-        u_site = site.getusersitepackages()
-        if u_site:
-            candidates.append(str(u_site))
-        s_dirs = site.getsitepackages()
-        if isinstance(s_dirs, list):
-            candidates.extend(s_dirs)
-    except Exception:
-        pass
-    candidates.extend([
-        "/usr/local/lib/python3.13",
-        "/usr/local/lib/python3.13/lib-dynload",
-        "/usr/local/lib/python3.13/site-packages",
-        "/home/next/Python-works/.venv/lib/python3.13/site-packages",
-        "/home/next/.local/lib/python3.13/site-packages",
-        "/usr/lib/python3/dist-packages",
-    ])
-    for c in candidates:
-        if os.path.isdir(c) and c not in sys.path:
-            sys.path.append(c)
+    if local_vendor.is_dir():
+        local_vendor_str = str(local_vendor.resolve())
+        if local_vendor_str not in sys.path:
+            sys.path.insert(0, local_vendor_str)
+
+        # Configure LD_LIBRARY_PATH so dynamic linker uses vendor_packages/torch/lib
+        torch_lib = local_vendor / "torch" / "lib"
+        if torch_lib.is_dir():
+            torch_lib_str = str(torch_lib.resolve())
+            curr_ld = os.environ.get("LD_LIBRARY_PATH", "")
+            if torch_lib_str not in curr_ld:
+                os.environ["LD_LIBRARY_PATH"] = f"{torch_lib_str}:{curr_ld}" if curr_ld else torch_lib_str
+    else:
+        # Fallback to host environment only when vendor_packages is absent
+        venv_dir = os.environ.get("VIRTUAL_ENV")
+        if venv_dir:
+            for sp in Path(venv_dir).glob("lib/python*/site-packages"):
+                sp_str = str(sp)
+                if sp_str not in sys.path:
+                    sys.path.append(sp_str)
+        try:
+            import site
+            u_site = site.getusersitepackages()
+            if u_site and os.path.isdir(u_site) and u_site not in sys.path:
+                sys.path.append(u_site)
+            s_dirs = site.getsitepackages()
+            if isinstance(s_dirs, list):
+                for sd in s_dirs:
+                    if os.path.isdir(sd) and sd not in sys.path:
+                        sys.path.append(sd)
+        except Exception:
+            pass
 
 _ensure_runtime_sys_path()
+
+# Apply compatibility shims before any deep learning framework imports
+try:
+    from src.customer_support_pipeline.core import shims  # noqa: F401
+except Exception:
+    pass
 
 # Ensure bundled Hugging Face models are loaded offline if present
 def _ensure_runtime_models_path():

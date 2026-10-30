@@ -22,15 +22,17 @@ def load_punctuation_model() -> Any:
     """Downloads helper and loads Horizon-Labs punctuation model once."""
     try:
         log_vram("Before Punctuation Load")
-        helper_path = hf_hub_download(
-            repo_id=PUNCTUATION_MODEL_ID,
-            filename="punctuate.py",
-        )
-
-        spec = importlib.util.spec_from_file_location("horizon_punctuate", helper_path)
-        punctuate_module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = punctuate_module
-        spec.loader.exec_module(punctuate_module)
+        if "horizon_punctuate" in sys.modules:
+            punctuate_module = sys.modules["horizon_punctuate"]
+        else:
+            helper_path = hf_hub_download(
+                repo_id=PUNCTUATION_MODEL_ID,
+                filename="punctuate.py",
+            )
+            spec = importlib.util.spec_from_file_location("horizon_punctuate", helper_path)
+            punctuate_module = importlib.util.module_from_spec(spec)
+            sys.modules["horizon_punctuate"] = punctuate_module
+            spec.loader.exec_module(punctuate_module)
 
         punctuator = punctuate_module.Punctuator(PUNCTUATION_MODEL_ID)
         logger.info("Horizon punctuation model loaded successfully.")

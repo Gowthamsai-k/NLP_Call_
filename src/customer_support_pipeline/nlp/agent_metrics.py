@@ -172,6 +172,10 @@ def _load_audio(wav_path: Optional[str]):
         import soundfile as sf
     except ImportError:
         return None, None, "soundfile not installed"
+    try:
+        import librosa
+    except ImportError:
+        return None, None, "librosa not installed"
     audio, sr = sf.read(wav_path, dtype="float32", always_2d=False)
     if audio.ndim > 1:
         audio = audio.mean(axis=1)

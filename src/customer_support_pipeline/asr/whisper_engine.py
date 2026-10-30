@@ -100,34 +100,39 @@ def load_asr_model(
 
         # 3. Fallback to Whisper if not Bodhan/Indic-Conformer or if they failed
         if bodhan_model is None and indic_model is None:
-            try:
-                from vllm import LLM, SamplingParams
-                log_vram("Before Whisper vLLM Load")
-                sys.stdout = sys.__stdout__
-                fallback_whisper_id = "openai/whisper-large-v3-turbo"
-                vllm_llm = LLM(
-                    model=fallback_whisper_id,
-                    dtype="half",
-                    trust_remote_code=True,
-                    max_model_len=WHISPER_MAX_MODEL_LEN,
-                    max_num_batched_tokens=WHISPER_MAX_BATCHED_TOKENS,
-                    max_num_seqs=1,
-                    limit_mm_per_prompt={"audio": 1},
-                    gpu_memory_utilization=gpu_memory_utilization,
-                    disable_log_stats=True,
-                    enforce_eager=True,
-                )
-                sampling_params = SamplingParams(
-                    temperature=0.0,
-                    max_tokens=WHISPER_MAX_TOKENS,
-                )
-                logger.info("vLLM Whisper engine initialized as fallback.")
-            except Exception as vllm_err:
-                logger.warning(
-                    f"vLLM engine unavailable ({type(vllm_err).__name__}: {vllm_err}). "
-                    "Switching to native Hugging Face Transformers Whisper pipeline..."
-                )
-                release_memory()
+            use_vllm = os.environ.get("USE_VLLM", "0").lower() in ("1", "true", "yes")
+            if use_vllm:
+                try:
+                    from vllm import LLM, SamplingParams
+                    log_vram("Before Whisper vLLM Load")
+                    sys.stdout = sys.__stdout__
+                    fallback_whisper_id = "openai/whisper-large-v3-turbo"
+                    vllm_llm = LLM(
+                        model=fallback_whisper_id,
+                        dtype="half",
+                        trust_remote_code=True,
+                        max_model_len=WHISPER_MAX_MODEL_LEN,
+                        max_num_batched_tokens=WHISPER_MAX_BATCHED_TOKENS,
+                        max_num_seqs=1,
+                        limit_mm_per_prompt={"audio": 1},
+                        gpu_memory_utilization=gpu_memory_utilization,
+                        disable_log_stats=True,
+                        enforce_eager=True,
+                    )
+                    sampling_params = SamplingParams(
+                        temperature=0.0,
+                        max_tokens=WHISPER_MAX_TOKENS,
+                    )
+                    logger.info("vLLM Whisper engine initialized as fallback.")
+                except Exception as vllm_err:
+                    logger.warning(
+                        f"vLLM engine unavailable ({type(vllm_err).__name__}: {vllm_err}). "
+                        "Switching to native Hugging Face Transformers Whisper pipeline..."
+                    )
+                    release_memory()
+                    vllm_llm = None
+
+            if vllm_llm is None:
                 from transformers import pipeline as make_pipeline
                 target_device = 0 if torch.cuda.is_available() else -1
                 fallback_model = "openai/whisper-large-v3-turbo"
@@ -267,7 +272,7 @@ def run_transcription(
 
                 elif indic_model is not None:
                     # Convert float32 numpy array to torch tensor (1, samples)
-                    wav_tensor = torch.from_numpy(turn_audio).unsqueeze(0).to(device)
+                    wav_tensor = torch.from_numpy(np.ascontiguousarray(turn_audio)).unsqueeze(0).to(device)
                     with torch.no_grad():
                         target_lang = active_lang if active_lang not in ("auto", "multilingual", None) else "en"
                         pred = indic_model(wav_tensor, target_lang, decoder_type)

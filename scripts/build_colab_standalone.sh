@@ -55,6 +55,17 @@ python3 -m nuitka \
   --nofollow-import-to=tornado \
   --nofollow-import-to=google \
   --nofollow-import-to=torch \
+  --nofollow-import-to=torchvision \
+  --nofollow-import-to=torchaudio \
+  --nofollow-import-to=torch_audiomentations \
+  --nofollow-import-to=torchcodec \
+  --nofollow-import-to=torchmetrics \
+  --nofollow-import-to=lightning \
+  --nofollow-import-to=pytorch_lightning \
+  --nofollow-import-to=librosa \
+  --nofollow-import-to=soundfile \
+  --nofollow-import-to=soxr \
+  --nofollow-import-to=sentencepiece \
   --nofollow-import-to=transformers \
   --nofollow-import-to=pyannote \
   --include-package=src \
@@ -62,8 +73,18 @@ python3 -m nuitka \
   --no-deployment-flag=self-execution \
   --include-data-dir=dashboard=dashboard \
   --output-dir=colab_dist \
-  --jobs=4 \
+  --lto=no \
+  --jobs=2 \
   dashboard_server.py
+
+# Remove any duplicate C10/PyTorch libraries or packages that Nuitka might have auto-copied into the root dist
+echo "Purging any stray duplicate shared libraries from dashboard_server.dist..."
+rm -f colab_dist/dashboard_server.dist/libc10*.so
+rm -f colab_dist/dashboard_server.dist/libtorch*.so
+rm -f colab_dist/dashboard_server.dist/libshm*.so
+rm -rf colab_dist/dashboard_server.dist/torch*
+rm -rf colab_dist/dashboard_server.dist/soxr
+rm -rf colab_dist/dashboard_server.dist/librosa
 
 # Move vendor_packages directly into the compiled distribution directory
 echo "Integrating vendor_packages into dashboard_server.dist..."

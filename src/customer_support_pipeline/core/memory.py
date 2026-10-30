@@ -12,16 +12,16 @@ import logging
 from typing import Any, Callable
 import psutil
 
+# Configure PyTorch memory allocator to avoid fragmentation in Colab
+if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 try:
     import torch
 except ImportError:
     torch = None
 
 logger = logging.getLogger(__name__)
-
-# Configure PyTorch memory allocator to avoid fragmentation in Colab
-if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
-    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
 def get_vram_usage() -> dict:
@@ -56,21 +56,26 @@ def cleanup_vllm_distributed():
     """
     Destroys vLLM's internal distributed environment and process groups.
     Without this, vLLM holds onto GPU memory buffers even after deleting the LLM object.
+    Only executes if vLLM is actively imported in sys.modules to prevent unwanted initialization.
     """
+    if "vllm" not in sys.modules:
+        return
+
     # 1. Destroy vLLM model parallel & distributed environment
     for mod_name in (
         "vllm.distributed",
         "vllm.distributed.parallel_state",
         "vllm.model_executor.parallel_state",
     ):
-        try:
-            mod = __import__(mod_name, fromlist=["destroy_model_parallel", "destroy_distributed_environment"])
-            if hasattr(mod, "destroy_model_parallel"):
-                mod.destroy_model_parallel()
-            if hasattr(mod, "destroy_distributed_environment"):
-                mod.destroy_distributed_environment()
-        except Exception:
-            pass
+        if mod_name in sys.modules:
+            try:
+                mod = sys.modules[mod_name]
+                if hasattr(mod, "destroy_model_parallel"):
+                    mod.destroy_model_parallel()
+                if hasattr(mod, "destroy_distributed_environment"):
+                    mod.destroy_distributed_environment()
+            except Exception:
+                pass
 
     # 2. Destroy PyTorch distributed process group if active
     if torch is not None and hasattr(torch, "distributed") and torch.distributed.is_initialized():

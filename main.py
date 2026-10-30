@@ -1,7 +1,21 @@
 #!/usr/bin/env python3
 """Convenience root wrapper allowing `python main.py ...` from repository root."""
+import os
 import sys
+import multiprocessing
 from pathlib import Path
+
+# Enforce spawn start method to prevent CUDA re-initialization crashes in forked subprocesses
+try:
+    multiprocessing.set_start_method("spawn", force=True)
+except (RuntimeError, ValueError):
+    pass
+
+# Configure PyTorch memory allocator and tokenizers parallelism
+if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+if "TOKENIZERS_PARALLELISM" not in os.environ:
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # If dashboard is requested, launch directly without loading ML dependencies
 if "--dashboard" in sys.argv:

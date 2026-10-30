@@ -4,6 +4,22 @@ Ensures legacy APIs and checkpoint loading expected by pyannote.audio, lightning
 and transformers continue to work seamlessly.
 """
 
+import os
+import sys
+
+# Configure PyTorch memory allocator and tokenizers before torch/cuda initialization
+if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+if "TOKENIZERS_PARALLELISM" not in os.environ:
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# Enforce spawn start method to prevent CUDA re-initialization crashes in forked subprocesses
+try:
+    import multiprocessing
+    multiprocessing.set_start_method("spawn", force=True)
+except (RuntimeError, ValueError):
+    pass
+
 from collections import namedtuple
 import importlib
 
@@ -70,6 +86,9 @@ try:
 
     if not hasattr(torchaudio, "list_audio_backends"):
         torchaudio.list_audio_backends = lambda: ["soundfile"]
+
+    if not hasattr(torchaudio, "set_audio_backend"):
+        torchaudio.set_audio_backend = lambda backend: None
 
     try:
         import torchaudio.backend.common as _tac
