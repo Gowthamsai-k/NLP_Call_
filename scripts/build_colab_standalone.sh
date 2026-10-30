@@ -19,19 +19,32 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq ffmpeg patchelf libsndfile1 libsecret-1-0 gir1.2-secret-1 || true
 
 echo ""
-echo "[2/6] Upgrading pip and installing Nuitka compiler..."
-python3 -m pip install --upgrade pip
-python3 -m pip install nuitka patchelf
+echo "[2/6] Detecting and preparing high-speed installer (uv)..."
+if ! command -v uv >/dev/null 2>&1; then
+  echo "Installing uv package manager for 10x faster installation..."
+  python3 -m pip install uv 2>/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="${HOME}/.local/bin:${PATH}"
+fi
+
+if command -v uv >/dev/null 2>&1; then
+  INSTALL_CMD="uv pip install --system"
+  VENDOR_CMD="uv pip install --target"
+else
+  INSTALL_CMD="python3 -m pip install"
+  VENDOR_CMD="python3 -m pip install --target"
+fi
+
+$INSTALL_CMD nuitka patchelf
 
 echo ""
 echo "[3/6] Installing full ML pipeline dependencies in environment..."
-python3 -m pip install -r requirements.txt sentencepiece soundfile pyyaml psutil
+$INSTALL_CMD -r requirements.txt sentencepiece soundfile pyyaml psutil
 
 echo ""
 echo "[4/6] Vendoring all runtime packages into offline bundle..."
 rm -rf colab_dist
 mkdir -p colab_dist/vendor_packages
-python3 -m pip install -r requirements.txt sentencepiece soundfile pyyaml psutil --target colab_dist/vendor_packages --no-compile
+$VENDOR_CMD colab_dist/vendor_packages -r requirements.txt sentencepiece soundfile pyyaml psutil --no-compile
 
 echo ""
 echo "[5/6] Compiling dashboard_server with Nuitka standalone engine..."
