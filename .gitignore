@@ -10,6 +10,7 @@ __pycache__/
 *$py.class
 *.so
 build/
+.build_venv/
 build_dist/
 build_onefile/
 *.dist/

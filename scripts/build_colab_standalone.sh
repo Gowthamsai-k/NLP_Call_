@@ -16,23 +16,30 @@ export UV_HTTP_TIMEOUT=21600
 
 echo ""
 echo "[1/6] Installing OS audio and build libraries (ffmpeg, patchelf)..."
-sudo apt-get update -qq || true
-sudo apt-get install -y -qq ffmpeg patchelf libsndfile1 libsecret-1-0 gir1.2-secret-1 || true
+sudo -n apt-get update -qq 2>/dev/null || true
+sudo -n apt-get install -y -qq ffmpeg patchelf libsndfile1 libsecret-1-0 gir1.2-secret-1 2>/dev/null || true
 
 echo ""
 echo "[2/6] Detecting and preparing high-speed installer (uv)..."
+export PATH="${HOME}/.local/bin:${PATH}"
 if ! command -v uv >/dev/null 2>&1; then
   echo "Installing uv package manager for 10x faster installation..."
-  python3 -m pip install uv 2>/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+  curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="${HOME}/.local/bin:${PATH}"
 fi
 
-if command -v uv >/dev/null 2>&1; then
-  INSTALL_CMD="uv pip install --system --index-strategy unsafe-best-match"
+# Determine whether we can write to system python or should activate local .build_venv
+if [ "$EUID" -ne 0 ] && [ ! -w "/usr/local/lib/python3.13" ]; then
+  if [ ! -d ".build_venv" ]; then
+    echo "Creating user build environment (.build_venv)..."
+    uv venv .build_venv
+  fi
+  source .build_venv/bin/activate
+  INSTALL_CMD="uv pip install --index-strategy unsafe-best-match"
   VENDOR_CMD="uv pip install --index-strategy unsafe-best-match --target"
 else
-  INSTALL_CMD="python3 -m pip install"
-  VENDOR_CMD="python3 -m pip install --target"
+  INSTALL_CMD="uv pip install --system --index-strategy unsafe-best-match"
+  VENDOR_CMD="uv pip install --index-strategy unsafe-best-match --target"
 fi
 
 $INSTALL_CMD nuitka patchelf
