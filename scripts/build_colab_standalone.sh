@@ -15,7 +15,7 @@ export PYTHONPATH=".:${PYTHONPATH:-}"
 
 echo ""
 echo "[1/6] Installing OS audio and build libraries (ffmpeg, patchelf)..."
-sudo apt-get update -qq
+sudo apt-get update -qq || true
 sudo apt-get install -y -qq ffmpeg patchelf libsndfile1 libsecret-1-0 gir1.2-secret-1 || true
 
 echo ""
