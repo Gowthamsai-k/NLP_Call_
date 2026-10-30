@@ -27,8 +27,8 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 if command -v uv >/dev/null 2>&1; then
-  INSTALL_CMD="uv pip install --system"
-  VENDOR_CMD="uv pip install --target"
+  INSTALL_CMD="uv pip install --system --index-strategy unsafe-best-match"
+  VENDOR_CMD="uv pip install --index-strategy unsafe-best-match --target"
 else
   INSTALL_CMD="python3 -m pip install"
   VENDOR_CMD="python3 -m pip install --target"
