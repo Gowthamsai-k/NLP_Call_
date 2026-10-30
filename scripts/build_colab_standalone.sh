@@ -12,7 +12,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT_DIR}"
 
 export PYTHONPATH=".:${PYTHONPATH:-}"
-export UV_HTTP_TIMEOUT=300
+export UV_HTTP_TIMEOUT=21600
 
 echo ""
 echo "[1/6] Installing OS audio and build libraries (ffmpeg, patchelf)..."
