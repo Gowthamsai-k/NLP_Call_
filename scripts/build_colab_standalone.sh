@@ -46,13 +46,13 @@ $INSTALL_CMD nuitka patchelf
 
 echo ""
 echo "[3/6] Installing full ML pipeline dependencies in environment..."
-$INSTALL_CMD -r requirements.txt sentencepiece soundfile pyyaml psutil
+$INSTALL_CMD -r requirements.txt sentencepiece soundfile pyyaml psutil pysqlite3-binary
 
 echo ""
 echo "[4/6] Vendoring all runtime packages into offline bundle..."
 rm -rf colab_dist
 mkdir -p colab_dist/vendor_packages
-$VENDOR_CMD colab_dist/vendor_packages -r requirements.txt sentencepiece soundfile pyyaml psutil --no-compile
+$VENDOR_CMD colab_dist/vendor_packages -r requirements.txt sentencepiece soundfile pyyaml psutil pysqlite3-binary --no-compile
 
 echo ""
 echo "[5/6] Compiling dashboard_server with Nuitka standalone engine..."
